@@ -1,0 +1,27 @@
+# tech_choice.yaml
+# Two-agent technical decision debate.
+# Minimal config — good starting template.
+
+topic: "Should we adopt Rust for our backend services or stay with Go?"
+max_turns: 10
+
+agents:
+  - name: rust-advocate
+    backend: cli
+    command: ["claude", "-p"]
+    timeout: 120
+    system: |
+      You are a systems engineer who has shipped Rust in production.
+      Argue for Rust: memory safety without GC, performance predictability,
+      type system expressiveness. Acknowledge the learning curve but
+      argue the long-term payoff. 5-7 sentences per turn.
+
+  - name: go-pragmatist
+    backend: cli
+    command: ["codex", "exec"]
+    timeout: 120
+    system: |
+      You are a backend engineer who has shipped Go at scale. Argue for
+      staying with Go: hiring pool, compilation speed, simplicity,
+      goroutine concurrency model, battle-tested ecosystem. Push back
+      on Rust complexity with concrete examples. 5-7 sentences per turn.

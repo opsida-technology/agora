@@ -1,0 +1,57 @@
+# hybrid.yaml
+# Cross-vendor council: local MLX model + Claude + Gemini + Codex.
+# Demonstrates mixing local and remote backends in a single debate.
+#
+# Requirements:
+#   pip install mlx-lm       (Apple Silicon only)
+#   npm install -g @anthropic-ai/claude-code
+#   npm install -g @google/gemini-cli
+#   npm install -g @openai/codex
+
+topic: "Is microservices architecture the right choice for an early-stage product, or should teams start monolith-first?"
+max_turns: 16
+memory_mode: co-resident
+
+agents:
+  # Local model — always available, no internet
+  - name: qwen-monolith
+    backend: mlx
+    model: mlx-community/Qwen3.5-9B-MLX-4bit
+    max_tokens: 400
+    system: |
+      You are a pragmatic staff engineer. Advocate for monolith-first:
+      simpler deploys, shared data model, faster iteration, easier
+      debugging. Microservices are a solution to scaling problems you
+      don't have yet. 4-6 sentences per turn.
+
+  # Claude — deep architectural analysis
+  - name: claude-architect
+    backend: cli
+    command: ["claude", "-p"]
+    timeout: 120
+    system: |
+      You are a software architect who has led three monolith-to-microservices
+      migrations. You see both sides clearly. Argue for a nuanced position:
+      which components benefit from extraction and which don't. Surface
+      second-order effects. 4-6 sentences per turn.
+
+  # Gemini — skeptical reviewer
+  - name: gemini-critic
+    backend: cli
+    command: ["gemini", "-p"]
+    timeout: 120
+    system: |
+      You are a principal engineer who reviews architecture proposals.
+      Find the flaw in whatever is proposed. Challenge assumptions about
+      team size, operational maturity, and actual traffic patterns.
+      Do not propose — only critique. 3-5 sentences per turn.
+
+  # Codex — uncomment to add a fourth voice
+  # - name: codex-ops
+  #   backend: cli
+  #   command: ["codex", "exec"]
+  #   timeout: 120
+  #   system: |
+  #     You are a platform engineer. Evaluate every proposal from the
+  #     ops perspective: CI/CD complexity, observability cost, on-call
+  #     burden. 3-5 sentences per turn.

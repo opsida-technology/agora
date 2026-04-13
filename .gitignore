@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.DS_Store
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+debates/
+configs/_temp.yaml
+configs/manufacturing_models.yaml
+configs/Opsida*.yaml

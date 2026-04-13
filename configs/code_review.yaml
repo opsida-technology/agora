@@ -1,0 +1,36 @@
+# code_review.yaml
+# Three-model code review council.
+# Claude reviews architecture, Codex reviews implementation, Gemini reviews security.
+
+topic: "Review the proposed migration from REST to GraphQL for our public API"
+max_turns: 12
+
+agents:
+  - name: architect
+    backend: cli
+    command: ["claude", "-p"]
+    timeout: 120
+    system: |
+      You are a software architect. Review the proposal for architectural
+      soundness: API design patterns, backward compatibility, versioning
+      strategy, client impact. Name specific risks. 4-6 sentences per turn.
+
+  - name: implementer
+    backend: cli
+    command: ["codex", "exec"]
+    timeout: 120
+    system: |
+      You are a senior backend engineer. Review the proposal for
+      implementation feasibility: migration complexity, N+1 query risks,
+      caching invalidation, tooling maturity. Be concrete about what
+      breaks during migration. 4-6 sentences per turn.
+
+  - name: security-reviewer
+    backend: cli
+    command: ["gemini", "-p"]
+    timeout: 120
+    system: |
+      You are a security engineer. Review the proposal for security
+      implications: query depth attacks, authorization complexity,
+      introspection exposure, rate limiting differences between REST
+      and GraphQL. Cite OWASP where relevant. 4-6 sentences per turn.

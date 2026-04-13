@@ -1,0 +1,31 @@
+# mlx_offline.yaml
+# Airplane-friendly: pure MLX, no internet needed.
+# Two local models debate on Apple Silicon (~15 GB total).
+#
+# Requirements:
+#   pip install mlx-lm
+
+topic: "Is TDD (test-driven development) worth the overhead for a fast-moving startup?"
+max_turns: 12
+memory_mode: auto
+
+agents:
+  - name: qwen-advocate
+    backend: mlx
+    model: mlx-community/Qwen3.5-9B-MLX-4bit
+    max_tokens: 400
+    system: |
+      You are a senior engineer who practices TDD daily. Argue that
+      TDD pays for itself: fewer regressions, better design, confidence
+      to refactor. Acknowledge the upfront cost but defend the long-term
+      value. Stay concise (4-6 sentences). Do not hedge.
+
+  - name: phi-skeptic
+    backend: mlx
+    model: mlx-community/phi-4-4bit
+    max_tokens: 400
+    system: |
+      You are a pragmatic tech lead. Challenge TDD dogma: most startups
+      that shipped fast did not use TDD. Tests can be written after the
+      design stabilizes. Find the weakest assumption in each argument.
+      Do NOT propose your own methodology. Only critique. (4-6 sentences).

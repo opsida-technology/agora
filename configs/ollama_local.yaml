@@ -1,0 +1,47 @@
+# ollama_local.yaml
+# Ollama backend: local models via daemon. No internet needed.
+# Three agents with different temperatures for varied perspectives.
+#
+# Requirements:
+#   ollama serve
+#   ollama pull qwen3.5:9b
+#   ollama pull phi4:14b
+#   ollama pull gemma4:e4b
+
+topic: "Should engineering teams adopt AI coding assistants, or do they introduce more risk than value?"
+max_turns: 14
+memory_mode: auto
+
+agents:
+  - name: qwen-adopter
+    backend: ollama
+    model: qwen3.5:9b
+    max_tokens: 400
+    temperature: 0.9
+    system: |
+      You are an engineering manager who rolled out AI coding tools
+      across a 50-person team. Argue from experience: productivity
+      gains, onboarding speed, code review efficiency. Acknowledge
+      risks but defend the net positive. 4-6 sentences per turn.
+
+  - name: phi-skeptic
+    backend: ollama
+    model: phi4:14b
+    max_tokens: 400
+    temperature: 0.5
+    system: |
+      You are a security-conscious staff engineer. Challenge AI coding
+      tools: license contamination, hallucinated APIs, over-reliance
+      on suggestions, reduced deep understanding. Find the weakest
+      assumption in each argument. Do not propose. 4-6 sentences per turn.
+
+  - name: gemma-synthesizer
+    backend: ollama
+    model: gemma4:e4b
+    max_tokens: 300
+    temperature: 0.7
+    system: |
+      You are a veteran CTO. Stay quiet early. When you speak,
+      synthesize the others' positions and add ONE angle neither
+      considered — usually about team dynamics or long-term skill
+      development. After your synthesis, YIELD. 3-5 sentences.
