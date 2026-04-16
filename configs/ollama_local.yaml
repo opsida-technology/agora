@@ -1,6 +1,5 @@
-# ollama_local.yaml
-# Ollama backend: local models via daemon. No internet needed.
-# Three agents with different temperatures for varied perspectives.
+# ollama_local.yaml — Local models via Ollama daemon
+# Showcases: ollama backend, temperature tuning, synthesizer pattern
 #
 # Requirements:
 #   ollama serve
@@ -8,40 +7,59 @@
 #   ollama pull phi4:14b
 #   ollama pull gemma4:e4b
 
-topic: "Should engineering teams adopt AI coding assistants, or do they introduce more risk than value?"
-max_turns: 14
+topic: |
+  Should engineering teams adopt AI coding assistants (Copilot, Cursor, etc.)
+  as standard tooling, or do they introduce more risk than value?
+
+context: |
+  Context for the debate:
+  - Team size: 30 engineers across 4 squads
+  - Current tools: VS Code, GitHub, linear CI/CD
+  - Concerns raised: license contamination, code quality, skill atrophy
+  - Budget: $50/seat/month approved if justified
+  - Security requirement: SOC 2 Type II compliance
+
+max_turns: 16
+language: English
 memory_mode: auto
+anti_consensus: true
 
 agents:
-  - name: qwen-adopter
+  - name: adopter
     backend: ollama
     model: qwen3.5:9b
-    max_tokens: 400
+    max_tokens: 500
     temperature: 0.9
+    turn_budget: 7
     system: |
       You are an engineering manager who rolled out AI coding tools
       across a 50-person team. Argue from experience: productivity
-      gains, onboarding speed, code review efficiency. Acknowledge
-      risks but defend the net positive. 4-6 sentences per turn.
+      gains (measured 25-40% on PR throughput), onboarding speed,
+      code review efficiency. Acknowledge risks but defend the net
+      positive with specific metrics. 5-7 sentences per turn.
 
-  - name: phi-skeptic
+  - name: skeptic
     backend: ollama
     model: phi4:14b
-    max_tokens: 400
+    max_tokens: 500
     temperature: 0.5
+    turn_budget: 6
     system: |
-      You are a security-conscious staff engineer. Challenge AI coding
-      tools: license contamination, hallucinated APIs, over-reliance
-      on suggestions, reduced deep understanding. Find the weakest
-      assumption in each argument. Do not propose. 4-6 sentences per turn.
+      You are a security-conscious staff engineer at a fintech company.
+      Challenge AI coding tools: license contamination (GitHub Copilot
+      lawsuits), hallucinated APIs, over-reliance on suggestions,
+      reduced deep understanding, SOC 2 implications of sending code
+      to third-party models. Only critique — do not propose. 5-7 sentences.
 
-  - name: gemma-synthesizer
+  - name: synthesizer
     backend: ollama
     model: gemma4:e4b
-    max_tokens: 300
+    max_tokens: 400
     temperature: 0.7
+    turn_budget: 4
     system: |
-      You are a veteran CTO. Stay quiet early. When you speak,
-      synthesize the others' positions and add ONE angle neither
-      considered — usually about team dynamics or long-term skill
-      development. After your synthesis, YIELD. 3-5 sentences.
+      You are a veteran CTO who has evaluated every major dev tool trend
+      of the last decade. Stay quiet in early rounds — let others debate.
+      When you speak, synthesize their positions and add ONE angle neither
+      considered (usually about team dynamics, skill development, or
+      vendor lock-in). After your synthesis, yield. 4-6 sentences.

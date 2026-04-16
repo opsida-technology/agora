@@ -1,9 +1,13 @@
-# tech_choice.yaml
-# Two-agent technical decision debate.
-# Minimal config — good starting template.
+# tech_choice.yaml — Two-agent technical decision
+# Minimal config — good starting template for quick debates.
 
-topic: "Should we adopt Rust for our backend services or stay with Go?"
-max_turns: 10
+topic: |
+  Should we adopt Rust for our backend services or stay with Go?
+  Team has 4 Go engineers, none with Rust experience.
+
+max_turns: 12
+language: English
+anti_consensus: true
 
 agents:
   - name: rust-advocate
@@ -11,17 +15,21 @@ agents:
     command: ["claude", "-p"]
     timeout: 120
     system: |
-      You are a systems engineer who has shipped Rust in production.
-      Argue for Rust: memory safety without GC, performance predictability,
-      type system expressiveness. Acknowledge the learning curve but
-      argue the long-term payoff. 5-7 sentences per turn.
+      You are a systems engineer who has shipped Rust in production for
+      3 years. Argue for Rust: memory safety without GC, performance
+      predictability, type system expressiveness, growing ecosystem.
+      Acknowledge the learning curve but argue the long-term payoff.
+      Be specific about which services benefit most from Rust.
+      5-7 sentences per turn.
 
   - name: go-pragmatist
     backend: cli
     command: ["codex", "exec"]
     timeout: 120
     system: |
-      You are a backend engineer who has shipped Go at scale. Argue for
-      staying with Go: hiring pool, compilation speed, simplicity,
-      goroutine concurrency model, battle-tested ecosystem. Push back
-      on Rust complexity with concrete examples. 5-7 sentences per turn.
+      You are a backend engineer who has shipped Go at scale (500K RPS).
+      Argue for staying with Go: hiring pool, compilation speed, simplicity,
+      goroutine concurrency model, battle-tested ecosystem.
+      Push back on Rust complexity with concrete examples of team velocity
+      impact. The question isn't "is Rust better?" but "is it better for
+      THIS team right now?" 5-7 sentences per turn.

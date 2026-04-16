@@ -1,0 +1,69 @@
+<svg width="1600" height="1600" viewBox="0 0 1600 1600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="300" y1="260" x2="1300" y2="1340" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f1f5f9"/>
+      <stop offset="1" stop-color="#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="strokeMain" x1="360" y1="360" x2="1240" y2="1240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0d9488"/>
+      <stop offset="1" stop-color="#0891b2"/>
+    </linearGradient>
+    <linearGradient id="strokeSoft" x1="300" y1="300" x2="1300" y2="1300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14b8a6" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#0891b2" stop-opacity="0.18"/>
+    </linearGradient>
+    <filter id="glow" x="118" y="118" width="1364" height="1364" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="26" result="effect1_foregroundBlur"/>
+    </filter>
+    <filter id="soft" x="194" y="194" width="1212" height="1212" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="10" result="effect1_foregroundBlur"/>
+    </filter>
+  </defs>
+
+  <!-- Mark -->
+  <g transform="translate(0 10)">
+    <!-- Outer speech/agora ring -->
+    <g filter="url(#glow)">
+      <path d="M800 250C1103.76 250 1350 496.236 1350 800C1350 1103.76 1103.76 1350 800 1350C714.407 1350 633.378 1330.46 561.119 1295.63L361 1355L410.842 1171.46C318.972 1074.34 250 945.216 250 800C250 496.236 496.236 250 800 250Z"
+            stroke="url(#strokeSoft)" stroke-width="22" stroke-linejoin="round"/>
+    </g>
+
+    <!-- Inner protocol loop -->
+    <g filter="url(#soft)">
+      <path d="M575 564C629.806 509.194 710.149 475 800 475C889.851 475 970.194 509.194 1025 564"
+            stroke="url(#strokeMain)" stroke-width="42" stroke-linecap="round"/>
+      <path d="M1038 706C1080.8 755.093 1106 819.31 1106 889C1106 1043.64 980.642 1169 826 1169C743.537 1169 669.41 1133.35 618.141 1076.59"
+            stroke="url(#strokeMain)" stroke-width="42" stroke-linecap="round"/>
+      <path d="M561 906C519.538 857.813 494 794.992 494 726C494 571.358 619.358 446 774 446C854.922 446 927.823 480.328 979.013 535.185"
+            stroke="url(#strokeMain)" stroke-width="42" stroke-linecap="round"/>
+    </g>
+
+    <!-- Nodes / speakers -->
+    <circle cx="531" cy="564" r="58" fill="url(#bg)" stroke="url(#strokeMain)" stroke-width="28"/>
+    <circle cx="1070" cy="564" r="58" fill="url(#bg)" stroke="url(#strokeMain)" stroke-width="28"/>
+    <circle cx="1123" cy="932" r="58" fill="url(#bg)" stroke="url(#strokeMain)" stroke-width="28"/>
+    <circle cx="585" cy="1074" r="58" fill="url(#bg)" stroke="url(#strokeMain)" stroke-width="28"/>
+
+    <!-- Central turn-taking hub -->
+    <circle cx="800" cy="800" r="120" fill="url(#bg)" stroke="url(#strokeMain)" stroke-width="34"/>
+    <path d="M750 800H850" stroke="url(#strokeMain)" stroke-width="30" stroke-linecap="round"/>
+    <path d="M800 750V850" stroke="url(#strokeMain)" stroke-width="30" stroke-linecap="round"/>
+
+    <!-- Addressing arrows -->
+    <path d="M603 608L702 697" stroke="url(#strokeMain)" stroke-width="26" stroke-linecap="round"/>
+    <path d="M693 648L721 714L653 696" fill="url(#strokeMain)"/>
+    <path d="M998 608L899 697" stroke="url(#strokeMain)" stroke-width="26" stroke-linecap="round"/>
+    <path d="M947 696L879 714L907 648" fill="url(#strokeMain)"/>
+    <path d="M1080 897L944 842" stroke="url(#strokeMain)" stroke-width="26" stroke-linecap="round"/>
+    <path d="M986 801L918 832L971 880" fill="url(#strokeMain)"/>
+    <path d="M636 1032L738 904" stroke="url(#strokeMain)" stroke-width="26" stroke-linecap="round"/>
+    <path d="M750 967L755 892L691 931" fill="url(#strokeMain)"/>
+
+    <!-- Conversation pulse -->
+    <circle cx="800" cy="800" r="228" stroke="url(#strokeSoft)" stroke-width="14" stroke-dasharray="8 26"/>
+  </g>
+</svg>

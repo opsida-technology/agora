@@ -37,9 +37,8 @@ def load_agents(cfg: dict) -> list[Agent]:
         name = ac.pop("name")
         system = ac.pop("system")
         turn_budget = ac.pop("turn_budget", None)  # handled later
-        agent = Agent(name=name, system=system, backend=make_backend(ac))
-        # Attach budget; actual default is computed after max_turns is known.
-        agent.turn_budget = turn_budget  # type: ignore[attr-defined]
+        agent = Agent(name=name, system=system, backend=make_backend(ac),
+                      turn_budget=turn_budget)
         agents.append(agent)
     return agents
 
@@ -117,8 +116,14 @@ def run(cfg_path: str, stream: bool = True):
     topic = cfg["topic"]
     max_turns = cfg.get("max_turns", 20)
     mode = cfg.get("memory_mode", "auto")
+    moderator_control = cfg.get("moderator_control", False)
+    min_rounds = cfg.get("min_rounds", 2)
 
     agents = load_agents(cfg)
+    # Yield protection: min half of fair share before yield allowed
+    min_yield = max(1, max_turns // (len(agents) * 2)) if agents else 1
+    for a in agents:
+        a.min_turns_before_yield = min_yield
     est = estimate_gb(agents)
 
     if mode == "auto":
@@ -131,7 +136,7 @@ def run(cfg_path: str, stream: bool = True):
             if a.backend.is_local:
                 a.backend.load()
 
-    max_retries = cfg.get("max_retries", 2)
+    max_retries = cfg.get("max_retries", 3)
     max_consecutive_pair = cfg.get("max_consecutive_pair", 3)
     anti_consensus = cfg.get("anti_consensus", True)
 
@@ -148,6 +153,10 @@ def run(cfg_path: str, stream: bool = True):
     # -- Anti-consensus tracking --
     consensus_streak = 0        # consecutive concede/synthesize turns
     last_conceder: str | None = None  # name of most recent conceder
+
+    # -- Moderator convergence control --
+    round_turn_count = 0
+    completed_rounds = 0
 
     while turn < max_turns:
         active = [a for a in agents if not a.yielded]
@@ -231,9 +240,10 @@ def run(cfg_path: str, stream: bool = True):
         callback = emit_token if stream else None
         msg = speaker.speak(topic, history, turn, on_token=callback)
 
-        # Detect failed responses and retry.
+        # Detect failed or empty responses and retry.
         _FAIL_MARKERS = ("[EMPTY RESPONSE", "[ERROR ", "[TIMEOUT", "[COMMAND NOT FOUND")
-        is_fail = any(msg.content.startswith(m) for m in _FAIL_MARKERS)
+        is_fail = (any(msg.content.startswith(m) for m in _FAIL_MARKERS)
+                   or len(msg.content.strip()) < 10)
 
         if is_fail:
             fail_streak[speaker.name] += 1
@@ -287,6 +297,29 @@ def run(cfg_path: str, stream: bool = True):
                 ))
                 # Reset streak so we don't re-inject every turn.
                 consensus_streak = 0
+
+        # ── Moderator convergence check (dynamic turn control) ──
+        if not is_fail:
+            round_turn_count += 1
+            n_active = len([a for a in agents if not a.yielded])
+            if round_turn_count >= n_active and n_active > 0:
+                completed_rounds += 1
+                round_turn_count = 0
+                if moderator_control and completed_rounds >= min_rounds:
+                    try:
+                        from .display import status as _status
+                        _status(f"Moderator evaluating after round {completed_rounds}...")
+                        eval_backend = agents[0].backend
+                        eval_backend.load()
+                        eval_result = eval_backend.generate(
+                            "You are a neutral debate moderator. Reply with one word only.",
+                            topic, history, "moderator-eval")
+                        if "conclude" in eval_result.lower():
+                            _status("Moderator: CONCLUDE")
+                            break
+                        _status("Moderator: CONTINUE")
+                    except Exception:
+                        pass
 
         # If speaker yielded, notify remaining agents.
         if speaker.yielded:

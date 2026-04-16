@@ -1,57 +1,76 @@
-# hybrid.yaml
-# Cross-vendor council: local MLX model + Claude + Gemini + Codex.
-# Demonstrates mixing local and remote backends in a single debate.
+# hybrid.yaml — Cross-vendor architecture council
+# Showcases: orchestration, phase_plan, turn_order, final_output_contract
 #
 # Requirements:
 #   pip install mlx-lm       (Apple Silicon only)
 #   npm install -g @anthropic-ai/claude-code
 #   npm install -g @google/gemini-cli
-#   npm install -g @openai/codex
 
-topic: "Is microservices architecture the right choice for an early-stage product, or should teams start monolith-first?"
-max_turns: 16
+topic: |
+  Is microservices architecture the right choice for an early-stage
+  product (< 10 engineers, < 1M users), or should teams start
+  monolith-first and extract services later?
+
+max_turns: 18
+language: English
 memory_mode: co-resident
+anti_consensus: true
+
+orchestration:
+  turn_order: [claude-architect, gemini-critic, qwen-monolith]
+  phase_plan:
+    - phase: 1
+      turns: 1-6
+      objective: Establish positions — each agent presents their core argument
+    - phase: 2
+      turns: 7-12
+      objective: Challenge and stress-test — find weaknesses in each position
+    - phase: 3
+      turns: 13-18
+      objective: Converge toward a concrete recommendation
+  final_output_contract: |
+    1. Recommended architecture for a 5-person team with $500K runway
+    2. What NOT to do in the first 6 months
+    3. Trigger conditions for re-evaluating the decision
+    4. 90-day implementation roadmap
 
 agents:
-  # Local model — always available, no internet
-  - name: qwen-monolith
-    backend: mlx
-    model: mlx-community/Qwen3.5-9B-MLX-4bit
-    max_tokens: 400
-    system: |
-      You are a pragmatic staff engineer. Advocate for monolith-first:
-      simpler deploys, shared data model, faster iteration, easier
-      debugging. Microservices are a solution to scaling problems you
-      don't have yet. 4-6 sentences per turn.
-
-  # Claude — deep architectural analysis
+  # Claude — deep architectural analysis + web search
   - name: claude-architect
     backend: cli
-    command: ["claude", "-p"]
-    timeout: 120
+    command: ["claude", "-p", "--allowedTools", "WebSearch,WebFetch"]
+    timeout: 180
+    turn_budget: 8
     system: |
       You are a software architect who has led three monolith-to-microservices
       migrations. You see both sides clearly. Argue for a nuanced position:
-      which components benefit from extraction and which don't. Surface
-      second-order effects. 4-6 sentences per turn.
+      which components benefit from early extraction and which don't.
+      Use web search to cite real-world case studies (Shopify, Segment, etc.).
+      Surface second-order effects. 5-7 sentences per turn.
 
-  # Gemini — skeptical reviewer
+  # Gemini — skeptical reviewer with web search
   - name: gemini-critic
     backend: cli
     command: ["gemini", "-p"]
-    timeout: 120
+    timeout: 180
+    turn_budget: 7
     system: |
       You are a principal engineer who reviews architecture proposals.
       Find the flaw in whatever is proposed. Challenge assumptions about
       team size, operational maturity, and actual traffic patterns.
-      Do not propose — only critique. 3-5 sentences per turn.
+      Search for counter-examples when someone makes a bold claim.
+      Do not propose — only critique. 4-6 sentences per turn.
 
-  # Codex — uncomment to add a fourth voice
-  # - name: codex-ops
-  #   backend: cli
-  #   command: ["codex", "exec"]
-  #   timeout: 120
-  #   system: |
-  #     You are a platform engineer. Evaluate every proposal from the
-  #     ops perspective: CI/CD complexity, observability cost, on-call
-  #     burden. 3-5 sentences per turn.
+  # Local model — always available, no internet
+  - name: qwen-monolith
+    backend: mlx
+    model: mlx-community/Qwen3.5-9B-MLX-4bit
+    max_tokens: 500
+    turn_budget: 6
+    system: |
+      You are a pragmatic staff engineer who has built three successful
+      products as monoliths. Advocate for monolith-first: simpler deploys,
+      shared data model, faster iteration, easier debugging. Microservices
+      are a solution to scaling problems you don't have yet.
+      When others agree with you too easily, push them to be more specific.
+      5-7 sentences per turn.

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Agora — All Configs</title>
+<link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+<link rel="stylesheet" href="/static/base.css">
+<script src="/static/base.js"></script>
+<script src="/static/i18n.js"></script>
+<style>
+  /* Page-specific layout only — base.css handles components */
+  .page { max-width: 1400px; }
+  .configs-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px; margin-bottom: var(--sp-lg);
+  }
+  .config-card .name { color: var(--cyan-text); font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .config-card .topic {
+    color: var(--text-secondary); font-size: 12px; margin-bottom: 8px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .config-card .meta { font-size: 11px; color: var(--dim); }
+  .config-card .meta span { margin-right: 12px; }
+  .config-card .mtime { font-size: 10px; color: var(--dim); margin-top: 6px; }
+  .config-card .btn-x {
+    position: absolute; top: 10px; right: 10px; background: none;
+    border: 1px solid transparent; border-radius: 6px; color: var(--dim);
+    cursor: pointer; padding: 2px 8px; font-size: 14px; opacity: 0; transition: all 0.2s;
+  }
+  .config-card:hover .btn-x { opacity: 0.6; }
+  .config-card .btn-x:hover { opacity: 1; color: var(--danger); border-color: var(--danger); }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .toolbar .search-input { flex: 1; min-width: 200px; }
+
+  /* ── Modal ─────────────────────────────────────── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: color-mix(in srgb, var(--text) 40%, transparent);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    overflow-y: auto; padding: 40px 16px;
+  }
+  .modal-overlay.open { display: flex; justify-content: center; align-items: flex-start; }
+  .modal-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); width: 100%; max-width: 1000px;
+    box-shadow: var(--shadow-lg); overflow: hidden;
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--sp-md) var(--sp-lg); border-bottom: 1px solid var(--border);
+    background: var(--bg-mid);
+  }
+  .modal-header h2 { font-size: 14px; font-weight: 600; }
+  .modal-close {
+    background: none; border: none; font-size: 20px; color: var(--dim);
+    cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm); transition: all 0.2s;
+  }
+  .modal-close:hover { color: var(--text); background: var(--bg); }
+  .modal-actions {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 14px var(--sp-lg); border-top: 1px solid var(--border);
+    background: var(--bg-mid);
+  }
+  .modal-actions .spacer { flex: 1; }
+
+  /* ── Editor tabs ───────────────────────────────── */
+  .tab-bar {
+    display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: var(--bg);
+  }
+  .tab {
+    padding: 6px 18px; font-size: 12px; border: none;
+    background: transparent; color: var(--dim); cursor: pointer;
+    border-radius: 8px; transition: all 0.2s; font-weight: 500; font-family: inherit;
+  }
+  .tab.active { background: var(--primary); color: var(--surface); font-weight: 600; }
+  .tab:hover:not(.active) { color: var(--text-secondary); background: var(--primary-glow); }
+
+  /* ── YAML textarea ─────────────────────────────── */
+  #yamlText {
+    width: 100%; min-height: 400px; padding: var(--sp-lg);
+    background: var(--bg); color: var(--text-secondary); border: none;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 13px; line-height: 1.6; resize: vertical; outline: none; tab-size: 2;
+  }
+  #yamlText:focus { box-shadow: inset 0 0 0 2px var(--primary-glow); }
+
+  /* ── Form editor ───────────────────────────────── */
+  #formEditor { padding: var(--sp-lg); }
+  .form-group { margin-bottom: var(--sp-lg); }
+  .form-group label {
+    display: block; font-size: 11px; color: var(--dim);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 500;
+  }
+  .form-input {
+    width: 100%; padding: 9px 12px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); font-size: 13px; outline: none;
+    transition: all 0.2s; font-family: inherit;
+  }
+  .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+  textarea.form-input { min-height: 80px; resize: vertical; }
+  textarea.system-prompt { min-height: 120px; }
+
+  .agent-form {
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 14px 14px 14px 18px; margin-bottom: 12px; background: var(--bg);
+    border-left: 3px solid var(--emerald); position: relative; transition: all 0.2s;
+  }
+  .agent-form:nth-child(2n) { border-left-color: var(--cyan); }
+  .agent-form:nth-child(3n) { border-left-color: var(--purple); }
+  .agent-form:nth-child(4n) { border-left-color: var(--orange); }
+  .agent-form:hover { border-color: var(--dim); }
+  .agent-form .agent-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .agent-form .agent-name { color: var(--cyan-text); font-weight: 600; font-size: 13px; }
+  .agent-form .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .remove-btn {
+    background: none; border: none; color: var(--dim); cursor: pointer;
+    font-size: 16px; transition: color 0.2s; padding: 4px;
+  }
+  .remove-btn:hover { color: var(--danger); }
+
+  @media (max-width: 768px) {
+    .configs-grid { grid-template-columns: 1fr; }
+    .modal-overlay { padding: var(--sp-md) var(--sp-sm); }
+    #yamlText { min-height: 250px; }
+    .agent-form .form-row { grid-template-columns: 1fr; }
+    .modal-actions { flex-direction: row; flex-wrap: wrap; }
+    .modal-actions .btn { flex: 1; min-width: 0; text-align: center; }
+    .modal-actions .spacer { flex-basis: 100%; height: 0; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content" data-t="app.skip">Skip to content</a>
+<main id="main-content" class="page">
+<a class="back-link" href="/" data-t="nav.back_dashboard">&larr; Dashboard</a>
+<h1 class="page-title" data-t="heading.debate_configs">Debate Configs</h1>
+<p class="page-subtitle" data-t="heading.debate_configs_sub">All debate configurations, sorted by last modified</p>
+
+<div class="toolbar">
+  <input type="text" class="search-input" id="searchInput" data-t-placeholder="placeholder.search_configs" placeholder="Search configs..." oninput="filterConfigs()">
+  <button class="btn primary" onclick="openNewConfig()" data-t="btn.new_config">+ New Config</button>
+</div>
+<div class="configs-grid" id="configsGrid"></div>
+
+<!-- ── Editor Modal ────────────────────────────────── -->
+<div class="modal-overlay" id="editorModal">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <h2 id="editorTitle" data-t="heading.edit_config">Edit Config</h2>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="tab-bar" role="tablist" id="editorTablist">
+          <div class="tab active" role="tab" aria-selected="true" aria-controls="panel-yaml" tabindex="0" onclick="switchTab('text')" data-t="tab.yaml">YAML</div>
+          <div class="tab" role="tab" aria-selected="false" aria-controls="panel-form" tabindex="-1" onclick="switchTab('form')" data-t="tab.editor">Editor</div>
+        </div>
+        <button class="modal-close" onclick="closeEditor()" data-t-title="btn.close" title="Close">&times;</button>
+      </div>
+    </div>
+    <div>
+      <div id="panel-yaml" role="tabpanel"><textarea id="yamlText" spellcheck="false" data-t-placeholder="placeholder.yaml" placeholder="# Paste or edit your debate config YAML here..."></textarea></div>
+      <div id="panel-form" role="tabpanel" hidden><div id="formEditor"></div></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn primary" onclick="saveConfig()" data-t="btn.save">Save</button>
+      <button class="btn danger" id="deleteBtn" onclick="deleteCurrentConfig()" data-t="btn.delete">Delete</button>
+      <span style="font-size:12px;color:var(--success);" id="saveMsg"></span>
+      <div class="spacer"></div>
+      <button class="btn" onclick="copyConfig()" data-t="btn.copy_yaml">Copy YAML</button>
+      <button class="btn" onclick="pasteConfig()" data-t="btn.paste">Paste</button>
+    </div>
+  </div>
+</div>
+</main>
+
+<script>
+let configs = [];
+let _allConfigs = [];
+let selectedConfig = null;
+
+// ── Load & render ──
+async function loadConfigs() {
+  const res = await fetch('/api/configs');
+  configs = await res.json();
+  _allConfigs = configs;
+  renderConfigs(configs);
+}
+
+function filterConfigs() {
+  const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
+  if (!q) { renderConfigs(_allConfigs); return; }
+  renderConfigs(_allConfigs.filter(c =>
+    (c.name||'').toLowerCase().includes(q) || (c.topic||'').toLowerCase().includes(q)));
+}
+
+function renderConfigs(items) {
+  const grid = document.getElementById('configsGrid');
+  if (!items.length) { grid.innerHTML = '<div class="empty-state">' + t('msg.no_configs_found') + '</div>'; return; }
+  grid.innerHTML = items.map(c => {
+    const mtime = c.mtime ? new Date(c.mtime * 1000).toLocaleString() : '';
+    return `
+    <div class="card config-card" onclick="openEditor('${c.file}')">
+      <div class="name">${c.name}</div>
+      <div class="topic">${c.topic}</div>
+      <div class="meta">
+        <span>${(c.clis||[]).map(cli => '<span class="cli-dot '+cli+'"></span>').join('')} ${t('debate.agents_count', {n: c.agents})}</span>
+        <span>${t('debate.turns_count', {n: c.max_turns})}</span>
+      </div>
+      ${mtime ? '<div class="mtime">' + mtime + '</div>' : ''}
+      <button class="btn-x" onclick="event.stopPropagation();deleteConfig('${c.file}')" title="Delete">&times;</button>
+    </div>`;
+  }).join('');
+}
+
+// ── Editor modal ──
+async function openEditor(file) {
+  selectedConfig = file;
+  const res = await fetch('/api/config?file=' + encodeURIComponent(file));
+  document.getElementById('yamlText').value = await res.text();
+  document.getElementById('editorTitle').textContent = file;
+  document.getElementById('deleteBtn').style.display = '';
+  document.getElementById('editorModal').classList.add('open');
+  syncFormFromYaml();
+  trapFocus(document.querySelector('.modal-panel'));
+}
+
+function openNewConfig() {
+  selectedConfig = null;
+  document.getElementById('yamlText').value = DEFAULT_YAML;
+  document.getElementById('editorTitle').textContent = t('heading.new_config');
+  document.getElementById('deleteBtn').style.display = 'none';
+  document.getElementById('editorModal').classList.add('open');
+  switchTab('text');
+  trapFocus(document.querySelector('.modal-panel'));
+}
+
+function closeEditor() { document.getElementById('editorModal').classList.remove('open'); }
+
+document.getElementById('editorModal').addEventListener('click', function(e) { if (e.target === this) closeEditor(); });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeEditor(); });
+
+// ── Tab switching ──
+function switchTab(tab) {
+  const tabs = document.querySelectorAll('#editorTablist [role="tab"]');
+  tabs.forEach(el => { el.classList.remove('active'); el.setAttribute('aria-selected','false'); el.tabIndex = -1; });
+  document.getElementById('panel-yaml').hidden = true;
+  document.getElementById('panel-form').hidden = true;
+  if (tab === 'text') {
+    tabs[0].classList.add('active'); tabs[0].setAttribute('aria-selected','true'); tabs[0].tabIndex = 0;
+    document.getElementById('panel-yaml').hidden = false;
+  } else {
+    tabs[1].classList.add('active'); tabs[1].setAttribute('aria-selected','true'); tabs[1].tabIndex = 0;
+    document.getElementById('panel-form').hidden = false;
+    syncFormFromYaml();
+  }
+}
+
+// ── Form <-> YAML sync ──
+function syncFormFromYaml() {
+  const text = document.getElementById('yamlText').value;
+  const editor = document.getElementById('formEditor');
+  fetch('/api/parse-yaml', { method: 'POST', headers: {'Content-Type': 'text/plain'}, body: text })
+    .then(r => r.json()).then(cfg => {
+      if (cfg.error) { editor.innerHTML = `<p style="color:var(--danger)">${cfg.error}</p>`; return; }
+      renderForm(cfg);
+    });
+}
+
+function renderForm(cfg) {
+  const editor = document.getElementById('formEditor');
+  const agents = cfg.agents || [];
+  let html = `
+    <div class="form-group">
+      <label>${t('label.topic')}</label>
+      <textarea class="form-input" id="fTopic" oninput="formChanged()">${cfg.topic || ''}</textarea>
+    </div>
+    <div class="form-group">
+      <label>${t('label.context')}</label>
+      <textarea class="form-input system-prompt" id="fContext" oninput="formChanged()" placeholder="${t('placeholder.context')}">${cfg.context || ''}</textarea>
+    </div>
+    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div><label>${t('label.max_turns')}</label><input class="form-input" type="number" id="fMaxTurns" value="${cfg.max_turns || 20}" oninput="formChanged()"></div>
+      <div><label>${t('label.language')}</label><input class="form-input" id="fLanguage" value="${cfg.language || 'English'}" oninput="formChanged()"></div>
+      <div><label>${t('label.memory_mode')}</label>
+        <select class="form-input" id="fMemMode" onchange="formChanged()">
+          <option value="auto" ${(cfg.memory_mode||'auto')==='auto'?'selected':''}>${t('memory.auto')}</option>
+          <option value="co-resident" ${cfg.memory_mode==='co-resident'?'selected':''}>${t('memory.co_resident')}</option>
+          <option value="hot-swap" ${cfg.memory_mode==='hot-swap'?'selected':''}>${t('memory.hot_swap')}</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>${t('label.agents')}</label><div id="agentsList">`;
+  agents.forEach((a, i) => { html += renderAgentForm(a, i); });
+  html += `</div><button class="btn" onclick="addAgent()" style="margin-top:8px">${t('btn.add_agent')}</button></div>`;
+  editor.innerHTML = html;
+}
+
+const CLI_PRESETS = [
+  { label: () => t('preset.claude'), cmd: 'claude -p' },
+  { label: () => t('preset.claude_web'), cmd: 'claude -p --allowedTools WebSearch,WebFetch' },
+  { label: () => t('preset.gemini'), cmd: 'gemini -p' },
+  { label: () => t('preset.codex'), cmd: 'codex exec' },
+  { label: () => t('preset.custom'), cmd: '' },
+];
+
+function renderAgentForm(a, i) {
+  const cmdStr = Array.isArray(a.command) ? a.command.join(' ') : (a.command || '');
+  const presetOptions = CLI_PRESETS.map(p =>
+    `<option value="${p.cmd}" ${cmdStr === p.cmd ? 'selected' : ''}>${p.label()}</option>`).join('');
+  const isCustomCmd = !CLI_PRESETS.some(p => p.cmd === cmdStr);
+  return `
+    <div class="agent-form" id="agent-${i}">
+      <div class="agent-header">
+        <span class="agent-name">${a.name || 'new-agent'}</span>
+        <button class="remove-btn" onclick="removeAgent(${i})">&#x2715;</button>
+      </div>
+      <div class="form-row">
+        <div><label>${t('label.name')}</label><input class="form-input" data-field="name" value="${a.name || ''}" oninput="formChanged()"></div>
+        <div><label>${t('label.backend')}</label>
+          <select class="form-input" data-field="backend" onchange="onBackendChange(this, ${i}); formChanged()">
+            <option value="cli" ${a.backend==='cli'?'selected':''}>${t('backend.cli')}</option>
+            <option value="api" ${a.backend==='api'?'selected':''}>${t('backend.api')}</option>
+            <option value="mlx" ${a.backend==='mlx'?'selected':''}>${t('backend.mlx')}</option>
+            <option value="ollama" ${a.backend==='ollama'?'selected':''}>${t('backend.ollama')}</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" id="cmd-row-${i}">
+        <div><label>${t('label.cli_tool')}</label>
+          <select class="form-input" data-field="preset" onchange="onPresetChange(this, ${i})">
+            ${presetOptions}
+            ${isCustomCmd ? `<option value="${cmdStr}" selected>${t('preset.custom')}</option>` : ''}
+          </select>
+        </div>
+        <div><label>${t('label.timeout')}</label><input class="form-input" type="number" data-field="timeout" value="${a.timeout || 120}" oninput="formChanged()"></div>
+      </div>
+      <div id="custom-cmd-${i}" style="${isCustomCmd ? '' : 'display:none'}">
+        <label>${t('label.custom_command')}</label>
+        <input class="form-input" data-field="command" value="${cmdStr}" oninput="formChanged()" placeholder="${t('placeholder.custom_cmd')}">
+      </div>
+      <div id="model-field-${i}" style="${a.backend !== 'cli' ? '' : 'display:none'}">
+        <label>${t('label.model')}</label>
+        <input class="form-input" data-field="model" value="${a.model || ''}" oninput="formChanged()">
+      </div>
+      <div id="api-fields-${i}" style="${a.backend === 'api' ? '' : 'display:none'}">
+        <div class="form-row">
+          <div><label>${t('label.base_url')}</label><input class="form-input" data-field="base_url" value="${a.base_url || 'http://localhost:8000/v1'}" oninput="formChanged()"></div>
+          <div><label>${t('label.api_key')}</label><input class="form-input" data-field="api_key" value="${a.api_key || 'none'}" oninput="formChanged()" type="password"></div>
+        </div>
+      </div>
+      <div><label>${t('label.system_prompt')}</label><textarea class="form-input system-prompt" data-field="system" oninput="formChanged()">${a.system || ''}</textarea></div>
+    </div>`;
+}
+
+function onBackendChange(sel, i) {
+  const b = sel.value;
+  document.getElementById('cmd-row-' + i).style.display = b === 'cli' ? '' : 'none';
+  document.getElementById('model-field-' + i).style.display = b !== 'cli' ? '' : 'none';
+  const af = document.getElementById('api-fields-' + i);
+  if (af) af.style.display = b === 'api' ? '' : 'none';
+}
+function onPresetChange(sel, i) {
+  const cd = document.getElementById('custom-cmd-' + i), ci = cd.querySelector('[data-field="command"]');
+  if (sel.value === '') { cd.style.display = ''; ci.value = ''; ci.focus(); }
+  else { cd.style.display = 'none'; ci.value = sel.value; }
+  formChanged();
+}
+function addAgent() {
+  const list = document.getElementById('agentsList'), i = list.children.length;
+  list.insertAdjacentHTML('beforeend', renderAgentForm({ name: 'new-agent', backend: 'cli', command: ['claude', '-p'], timeout: 120, system: '' }, i));
+  formChanged();
+}
+function removeAgent(i) { document.getElementById(`agent-${i}`).remove(); formChanged(); }
+
+function formChanged() {
+  const topic = document.getElementById('fTopic')?.value || '';
+  const context = document.getElementById('fContext')?.value || '';
+  const language = document.getElementById('fLanguage')?.value || 'English';
+  const maxTurns = parseInt(document.getElementById('fMaxTurns')?.value || '20');
+  const memMode = document.getElementById('fMemMode')?.value || 'auto';
+  const agents = [];
+  document.querySelectorAll('.agent-form').forEach(af => {
+    const get = (f) => af.querySelector(`[data-field="${f}"]`)?.value || '';
+    const backend = get('backend');
+    const preset = af.querySelector('[data-field="preset"]')?.value || '';
+    const customCmd = get('command');
+    const cmdRaw = backend === 'cli' ? (preset || customCmd) : '';
+    const agent = { name: get('name'), backend, timeout: parseInt(get('timeout') || '120'), system: get('system') };
+    if (backend === 'cli') agent.command = cmdRaw.split(/\s+/).filter(Boolean);
+    else {
+      agent.model = get('model');
+      if (backend === 'api') { const bu = get('base_url'), ak = get('api_key'); if (bu) agent.base_url = bu; if (ak && ak !== 'none') agent.api_key = ak; }
+    }
+    agents.push(agent);
+    af.querySelector('.agent-name').textContent = get('name') || 'agent';
+  });
+  fetch('/api/to-yaml', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ topic, context: context || undefined, language, max_turns: maxTurns, memory_mode: memMode, agents })
+  }).then(r => r.text()).then(y => { document.getElementById('yamlText').value = y; });
+}
+
+// ── Save / Delete / Copy / Paste ──
+async function saveConfig() {
+  const text = document.getElementById('yamlText').value;
+  if (!text.trim()) { showToast(t('toast.nothing_save'), 'error'); return; }
+  let name = selectedConfig;
+  if (!name) { name = prompt(t('msg.config_filename')); if (!name) return; name = name.replace(/\.yaml$/, '') + '.yaml'; selectedConfig = name; }
+  const res = await fetch('/api/config?file=' + encodeURIComponent(name), { method: 'POST', headers: {'Content-Type': 'text/plain'}, body: text });
+  if (res.ok) { showToast(t('toast.saved', {name}), 'success'); document.getElementById('editorTitle').textContent = name; loadConfigs(); }
+  else { showToast(t('toast.save_failed'), 'error'); }
+}
+async function deleteCurrentConfig() {
+  if (!selectedConfig || !confirm(t('btn.delete') + ' ' + selectedConfig + '?')) return;
+  const res = await fetch('/api/config?file=' + encodeURIComponent(selectedConfig), {method: 'DELETE'});
+  if (res.ok) { showToast(t('toast.deleted'), 'success'); closeEditor(); loadConfigs(); }
+  else { showToast(t('toast.delete_failed'), 'error'); }
+}
+async function deleteConfig(file) {
+  if (!confirm(t('btn.delete') + ' ' + file + '?')) return;
+  const res = await fetch('/api/config?file=' + encodeURIComponent(file), {method: 'DELETE'});
+  if (res.ok) { showToast(t('toast.deleted'), 'success'); loadConfigs(); }
+  else { showToast(t('toast.delete_failed'), 'error'); }
+}
+async function copyConfig() {
+  const text = document.getElementById('yamlText').value;
+  if (!text.trim()) { showToast(t('toast.nothing_copy'), 'error'); return; }
+  try { await navigator.clipboard.writeText(text); } catch(e) {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  }
+  showToast(t('toast.copied'), 'success');
+}
+async function pasteConfig() {
+  try { document.getElementById('yamlText').value = await navigator.clipboard.readText(); syncFormFromYaml(); showToast(t('toast.pasted'), 'success'); }
+  catch(e) { showToast(t('toast.clipboard_denied'), 'error'); }
+}
+
+const DEFAULT_YAML = `# Debate Config
+
+topic: |
+  Your debate topic here — be specific and debatable.
+
+max_turns: 20
+language: English
+memory_mode: auto
+anti_consensus: true
+
+agents:
+
+  - name: advocate
+    backend: cli
+    command: ["claude", "-p", "--allowedTools", "WebSearch,WebFetch"]
+    timeout: 180
+    turn_budget: 8
+    system: |
+      You argue FOR the proposal. Be specific, use evidence,
+      cite sources via web search. 5-7 sentences per turn.
+
+  - name: critic
+    backend: cli
+    command: ["claude", "-p"]
+    timeout: 180
+    turn_budget: 8
+    system: |
+      Your system prompt here.
+`;
+
+loadConfigs();
+initTabs(document.getElementById('editorTablist'));
+</script>
+</body>
+</html>

@@ -10,7 +10,7 @@ Supported:
 """
 import gc
 import json
-import os
+import re as _re
 import subprocess
 import urllib.request
 from typing import Iterator
@@ -251,8 +251,6 @@ class APIBackend(Backend):
 # Output cleaners strip wrapper noise from specific CLIs.
 # Each takes raw stdout and returns the actual model response.
 
-import re as _re
-
 def _clean_codex(raw: str) -> str:
     """Strip Codex exec header/footer, keep only model response."""
     lines = raw.split("\n")
@@ -454,16 +452,28 @@ class CLIBackend(Backend):
             except BrokenPipeError:
                 pass
 
-        # Stream stdout chunk by chunk.
-        raw_chunks: list[bytes] = []
+        # Stream stdout line by line, filtering noise in real-time.
+        raw_chunks: list[str] = []
+        _noise = ("Loaded cached credentials", "[STARTUP]", "[ERROR gemini]",
+                  "Recording metric for phase:", "StartupProfiler",
+                  "session id:", "tokens used", "workdir:", "model:",
+                  "provider:", "approval:", "sandbox:", "reasoning effort:",
+                  "reasoning summaries:", "mcp startup:")
         try:
-            fd = proc.stdout.fileno()
-            while True:
-                chunk = os.read(fd, 4096)
-                if not chunk:
-                    break
-                raw_chunks.append(chunk)
-                yield chunk.decode("utf-8", errors="replace")
+            for raw_line in proc.stdout:
+                line = raw_line.decode("utf-8", errors="replace")
+                raw_chunks.append(line)
+                stripped = line.strip()
+                # Skip known CLI noise lines
+                if any(stripped.startswith(n) or n in stripped for n in _noise):
+                    continue
+                # Skip codex header lines (e.g. "OpenAI Codex v0.114.0")
+                if stripped.startswith("OpenAI Codex") or stripped == "--------":
+                    continue
+                # Skip codex speaker labels and token counts
+                if stripped in ("user", "codex", "") or _re.match(r"^[\d,]+$", stripped):
+                    continue
+                yield line
         except OSError:
             pass
 
@@ -491,7 +501,7 @@ class CLIBackend(Backend):
             return
 
         # Capture session id from first run.
-        raw_output = b"".join(raw_chunks).decode("utf-8", errors="replace")
+        raw_output = "".join(raw_chunks)
         if self._turn_count == 1:
             if self.command[0] == "codex":
                 self._capture_codex_session(raw_output)

@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Agora — Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+<link rel="stylesheet" href="/static/base.css">
+<script src="/static/base.js"></script>
+<script src="/static/i18n.js"></script>
+<style>
+  /* ── Page layout — wider on desktop ──────────── */
+  body {
+    max-width: 1400px; margin: 0 auto; padding: var(--sp-lg) var(--sp-md);
+  }
+  .hero {
+    padding: var(--sp-lg) 0 20px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .hero h1 {
+    font-size: 28px; font-weight: 700; letter-spacing: -0.3px;
+    color: var(--primary); margin-bottom: 4px;
+  }
+  .hero .subtitle { color: var(--dim); font-size: 13px; }
+
+  /* ── Last debate card ────────────────────────── */
+  .last-debate {
+    background: var(--success-bg);
+    border: 1px solid var(--success); border-radius: var(--radius-md);
+    padding: var(--sp-md) 20px; margin-bottom: 20px; cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .last-debate:hover { border-color: var(--success); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .last-debate .ld-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--success); font-weight: 600; margin-bottom: 6px;
+  }
+  .last-debate .ld-topic { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .last-debate .ld-meta { font-size: 12px; color: var(--dim); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .last-debate .ld-meta .badge { margin-top: 2px; }
+
+  /* ── Status bar ──────────────────────────────── */
+  .status-bar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+    margin-bottom: var(--sp-lg); font-size: 13px; color: var(--text-secondary);
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.idle { background: var(--dim); }
+  .status-dot.running { background: var(--emerald); box-shadow: 0 0 8px var(--success-bg); animation: pulse 2s infinite; }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+
+  /* ── Config cards grid ───────────────────────── */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .section-header h2 {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .section-header a { font-size: 13px; color: var(--primary); text-decoration: none; font-weight: 500; }
+  .section-header a:hover { text-decoration: underline; }
+
+  .configs-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px; margin-bottom: var(--sp-lg);
+  }
+  .config-card .name { color: var(--cyan-text); font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .config-card .topic {
+    color: var(--text-secondary); font-size: 12px; margin-bottom: 8px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .config-card .meta { font-size: 11px; color: var(--dim); }
+  .config-card .meta span { margin-right: 12px; }
+
+  /* ── Modal (shared) ──────────────────────────── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: color-mix(in srgb, var(--text) 40%, transparent);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    overflow-y: auto; padding: 40px 16px;
+  }
+  .modal-overlay.open { display: flex; justify-content: center; align-items: flex-start; }
+  .modal-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); width: 100%; max-width: 1000px;
+    box-shadow: var(--shadow-lg); overflow: hidden;
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--sp-md) var(--sp-lg); border-bottom: 1px solid var(--border);
+    background: var(--bg-mid);
+  }
+  .modal-header h2 { font-size: 14px; font-weight: 600; }
+  .modal-close {
+    background: none; border: none; font-size: 20px; color: var(--dim);
+    cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm); transition: all 0.2s;
+  }
+  .modal-close:hover { color: var(--text); background: var(--bg); }
+  .modal-body { padding: var(--sp-lg); }
+  .modal-footer {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 14px var(--sp-lg); border-top: 1px solid var(--border);
+    background: var(--bg-mid);
+  }
+  .modal-footer .spacer { flex: 1; }
+
+  /* ── Start Debate modal — config picker ──────── */
+  .picker-list { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; }
+  .picker-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); cursor: pointer;
+    transition: all 0.2s; background: var(--bg);
+  }
+  .picker-item:hover { border-color: var(--primary); background: var(--primary-glow); }
+  .picker-item.selected { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); background: var(--primary-glow); }
+  .picker-item .pi-name { font-weight: 600; font-size: 13px; color: var(--text); }
+  .picker-item .pi-topic { font-size: 12px; color: var(--dim); margin-top: 2px;
+    display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .picker-item .pi-meta { font-size: 11px; color: var(--dim); white-space: nowrap; }
+
+  /* ── Editor modal tabs ─────────────────────── */
+  .tab-bar {
+    display: flex; gap: 4px; padding: 3px; border-radius: 10px;
+    background: var(--bg); border: 1px solid var(--border);
+  }
+  .tab {
+    padding: 6px 18px; font-size: 12px; border: none;
+    background: transparent; color: var(--dim); cursor: pointer;
+    border-radius: 8px; transition: all 0.2s; font-weight: 500; font-family: inherit;
+  }
+  .tab.active { background: var(--primary); color: var(--surface); font-weight: 600; }
+  .tab:hover:not(.active) { color: var(--text); background: var(--surface); }
+
+  /* ── YAML textarea ─────────────────────────── */
+  #yamlText {
+    width: 100%; min-height: 400px; padding: var(--sp-lg);
+    background: var(--bg); color: var(--text-secondary); border: none;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 13px; line-height: 1.6; resize: vertical; outline: none; tab-size: 2;
+  }
+  #yamlText:focus { box-shadow: inset 0 0 0 2px var(--primary-glow); }
+
+  /* ── Form editor ───────────────────────────── */
+  #formEditor { padding: var(--sp-lg); }
+  .form-group { margin-bottom: var(--sp-lg); }
+  .form-group label {
+    display: block; font-size: 11px; color: var(--dim);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 500;
+  }
+  .form-input {
+    width: 100%; padding: 9px 12px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); font-size: 13px; outline: none;
+    transition: all 0.2s; font-family: inherit;
+  }
+  .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+  textarea.form-input { min-height: 80px; resize: vertical; }
+  textarea.system-prompt { min-height: 120px; }
+
+  .agent-form {
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 14px 14px 14px 18px; margin-bottom: 12px; background: var(--bg);
+    border-left: 3px solid var(--emerald); position: relative; transition: all 0.2s;
+  }
+  .agent-form:nth-child(2n) { border-left-color: var(--cyan); }
+  .agent-form:nth-child(3n) { border-left-color: var(--purple); }
+  .agent-form:nth-child(4n) { border-left-color: var(--orange); }
+  .agent-form:hover { border-color: var(--dim); }
+  .agent-form .agent-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .agent-form .agent-name { color: var(--cyan-text); font-weight: 600; font-size: 13px; }
+  .agent-form .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .remove-btn {
+    background: none; border: none; color: var(--dim); cursor: pointer;
+    font-size: 16px; transition: color 0.2s; padding: 4px;
+  }
+  .remove-btn:hover { color: var(--danger); }
+
+  /* ── Responsive ─────────────────────────────── */
+  @media (max-width: 768px) {
+    body { padding: 12px 8px; }
+    .hero h1 { font-size: 20px; }
+    .status-bar { flex-wrap: wrap; gap: 8px; padding: 12px 14px; font-size: 12px; }
+    .status-bar .btn { flex: 1; min-width: 0; text-align: center; }
+    #statusText { flex: 1 1 100%; order: -1; }
+    .configs-grid { grid-template-columns: 1fr 1fr; }
+    .modal-overlay { padding: var(--sp-md) var(--sp-sm); }
+    .modal-panel { max-width: 100%; }
+    #yamlText { min-height: 250px; }
+    .agent-form .form-row { grid-template-columns: 1fr; }
+    .modal-footer { flex-direction: row; flex-wrap: wrap; }
+    .modal-footer .btn { flex: 1; min-width: 0; text-align: center; }
+    .modal-footer .spacer { flex-basis: 100%; height: 0; }
+    .picker-list { max-height: 300px; }
+  }
+  @supports (padding-top: env(safe-area-inset-top)) {
+    body {
+      padding-top: calc(12px + env(safe-area-inset-top));
+      padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+  }
+  @media (pointer: coarse) {
+    .picker-item { min-height: 44px; }
+    .tab { min-height: 40px; display: flex; align-items: center; justify-content: center; }
+    .form-input, select.form-input { min-height: 44px; }
+    .remove-btn { min-width: 44px; min-height: 44px; font-size: 20px;
+      display: flex; align-items: center; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content" data-t="app.skip">Skip to content</a>
+<main id="main-content">
+
+<!-- ── Hero ──────────────────────────────────────── -->
+<div class="hero" style="display:flex;align-items:center;gap:16px;">
+  <img src="/static/logo.svg" alt="Agora Protocol" width="52" height="52" style="flex-shrink:0;">
+  <div style="flex:1;">
+    <h1 data-t="app.title">Agora Protocol</h1>
+    <div class="subtitle" data-t="app.subtitle">Multi-agent debate platform — structured discourse between AI models</div>
+  </div>
+  <select id="langSelect" onchange="I18N.setLang(this.value)" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--dim);font-size:11px;padding:4px 8px;cursor:pointer;outline:none;-webkit-appearance:none;appearance:none;">
+    <option value="en">EN</option>
+    <option value="tr">TR</option>
+  </select>
+</div>
+
+<!-- ── Last debate ──────────────────────────────── -->
+<div id="lastDebate" style="display:none" class="last-debate"></div>
+
+<!-- ── Status bar ───────────────────────────────── -->
+<div class="status-bar">
+  <div class="status-dot" id="statusDot"></div>
+  <span id="statusText" data-t="status.idle">Idle</span>
+  <div style="flex:1"></div>
+  <a class="btn" href="/history" style="text-decoration:none" data-t="nav.history">History</a>
+  <button class="btn primary" id="startBtn" onclick="openStartModal()" data-t="btn.start_debate">Start Debate</button>
+  <button class="btn danger" id="stopBtn" onclick="stopDebate()" style="display:none" data-t="btn.stop">Stop</button>
+  <a class="btn" id="viewBtn" href="/debate" style="display:none;text-decoration:none" data-t="btn.view_debate">View Debate</a>
+</div>
+
+<!-- ── Config cards (max 3) ─────────────────────── -->
+<div class="section-header">
+  <h2 data-t="section.configs">Configs</h2>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <button class="btn" onclick="openEditorModal(null)" style="font-size:12px;padding:6px 14px;" data-t="btn.new">+ New</button>
+    <a href="/configs" id="showAllLink" style="display:none;" data-t="section.all_configs">All configs &rarr;</a>
+  </div>
+</div>
+<div class="configs-grid" id="configsGrid"></div>
+
+<!-- ── Start Debate Modal ───────────────────────── -->
+<div class="modal-overlay" id="startModal">
+  <div class="modal-panel" style="max-width:600px;">
+    <div class="modal-header">
+      <h2 data-t="heading.start_debate">Start Debate</h2>
+      <button class="modal-close" onclick="closeStartModal()" data-t-title="btn.close" title="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--dim);margin-bottom:var(--sp-md);" data-t="msg.select_config">Select a config to start a debate.</p>
+      <div class="picker-list" id="pickerList"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn primary" id="confirmStartBtn" onclick="confirmStart()" disabled data-t="btn.start">Start</button>
+      <button class="btn" onclick="closeStartModal()" data-t="btn.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Config Editor Modal ──────────────────────── -->
+<div class="modal-overlay" id="editorModal">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <h2 id="editorTitle" data-t="heading.edit_config">Edit Config</h2>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="tab-bar" role="tablist" id="editorTablist">
+          <div class="tab active" role="tab" aria-selected="true" aria-controls="panel-yaml" tabindex="0" onclick="switchTab('text')" data-t="tab.yaml">YAML</div>
+          <div class="tab" role="tab" aria-selected="false" aria-controls="panel-form" tabindex="-1" onclick="switchTab('form')" data-t="tab.editor">Editor</div>
+        </div>
+        <button class="modal-close" onclick="closeEditorModal()" data-t-title="btn.close" title="Close">&times;</button>
+      </div>
+    </div>
+    <div>
+      <div id="panel-yaml" role="tabpanel"><textarea id="yamlText" spellcheck="false" data-t-placeholder="placeholder.yaml" placeholder="# Paste or edit your debate config YAML here..."></textarea></div>
+      <div id="panel-form" role="tabpanel" hidden><div id="formEditor"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn primary" onclick="saveConfig()" data-t="btn.save">Save</button>
+      <button class="btn danger" id="deleteBtn" onclick="deleteCurrentConfig()" data-t="btn.delete">Delete</button>
+      <span style="font-size:12px;color:var(--success);" id="saveMsg"></span>
+      <div class="spacer"></div>
+      <button class="btn" onclick="copyConfig()" data-t="btn.copy_yaml">Copy YAML</button>
+      <button class="btn" onclick="pasteConfig()" data-t="btn.paste">Paste</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Quiz overlay (unchanged) ─────────────────── -->
+<div id="quizOverlay" class="modal-overlay">
+  <div class="modal-panel" style="max-width:700px;">
+    <div class="modal-header">
+      <h2 data-t="heading.pre_debate_quiz">Pre-Debate Knowledge Check</h2>
+      <button class="modal-close" onclick="document.getElementById('quizOverlay').classList.remove('open')" data-t-title="btn.close" title="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--dim);font-size:13px;margin-bottom:var(--sp-lg);" data-t="msg.quiz_instruction">Answer these questions to enrich the debate context. Your answers will be injected into each agent's background.</p>
+      <div id="quizQuestions"></div>
+      <div style="margin-top:var(--sp-md);padding:14px;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--border);">
+        <label style="font-size:12px;color:var(--dim);display:block;margin-bottom:6px;" data-t="label.additional_comments">Additional comments (optional)</label>
+        <textarea id="quizGeneralComment" data-t-placeholder="placeholder.quiz_comment" placeholder="Anything else the agents should know..." style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none;min-height:50px;resize:vertical;font-family:inherit;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn primary" onclick="submitQuiz()" data-t="btn.start_with_answers">Start Debate with Answers</button>
+      <button class="btn" onclick="skipQuiz()" data-t="btn.skip_start">Skip &amp; Start Without</button>
+      <button class="btn" onclick="document.getElementById('quizOverlay').classList.remove('open')" data-t="btn.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+let selectedConfig = null;
+let configs = [];
+let pickerSelected = null;
+
+function toast(msg, color) {
+  const type = color && color.includes('red') ? 'error' : color && color.includes('yellow') ? 'warning' : 'success';
+  showToast(msg, type);
+}
+
+// ── Config loading — show max 3 on dashboard ──
+async function loadConfigs() {
+  const res = await fetch('/api/configs');
+  configs = await res.json();
+  const grid = document.getElementById('configsGrid');
+  const show = configs.slice(0, 4);
+  grid.innerHTML = show.map(c => `
+    <div class="card config-card" onclick="openEditorModal('${c.file}')">
+      <div class="name">${c.name}</div>
+      <div class="topic">${c.topic}</div>
+      <div class="meta">
+        <span>${(c.clis||[]).map(cli => '<span class="cli-dot '+cli+'"></span>').join('')} ${t('debate.agents_count', {n: c.agents})}</span>
+        <span>${t('debate.turns_count', {n: c.max_turns})}</span>
+      </div>
+    </div>`).join('');
+  document.getElementById('showAllLink').style.display = configs.length > 4 ? '' : 'none';
+}
+
+// ── Start Debate Modal ──
+function openStartModal() {
+  pickerSelected = null;
+  const list = document.getElementById('pickerList');
+  if (!configs.length) { list.innerHTML = '<div class="empty-state">' + t('msg.no_configs') + '</div>'; }
+  else {
+    list.innerHTML = configs.map(c => `
+      <div class="picker-item" data-file="${c.file}" onclick="selectPicker(this, '${c.file}')">
+        <div style="flex:1;">
+          <div class="pi-name">${c.name}</div>
+          <div class="pi-topic">${c.topic}</div>
+        </div>
+        <div class="pi-meta">
+          ${(c.clis||[]).map(cli => '<span class="cli-dot '+cli+'"></span>').join('')}
+          ${t('debate.agents_count', {n: c.agents})} &middot; ${t('debate.turns_count', {n: c.max_turns})}
+        </div>
+      </div>`).join('');
+  }
+  document.getElementById('confirmStartBtn').disabled = true;
+  document.getElementById('startModal').classList.add('open');
+  trapFocus(document.querySelector('#startModal .modal-panel'));
+}
+
+function selectPicker(el, file) {
+  document.querySelectorAll('.picker-item').forEach(p => p.classList.remove('selected'));
+  el.classList.add('selected');
+  pickerSelected = file;
+  document.getElementById('confirmStartBtn').disabled = false;
+}
+
+function closeStartModal() { document.getElementById('startModal').classList.remove('open'); pickerSelected = null; }
+
+async function confirmStart() {
+  if (!pickerSelected) return;
+  closeStartModal();
+  pendingDebateFile = pickerSelected;
+
+  // Load config text for quiz check
+  const res = await fetch('/api/config?file=' + encodeURIComponent(pickerSelected));
+  const text = await res.text();
+
+  try {
+    const parseRes = await fetch('/api/parse-yaml', { method: 'POST', headers: {'Content-Type': 'text/plain'}, body: text });
+    const cfg = await parseRes.json();
+    if (cfg.context && cfg.context.trim().length > 50) {
+      const startBtn = document.getElementById('startBtn');
+      startBtn.disabled = true;
+      startBtn.textContent = t('toast.generating_quiz');
+      toast(t('toast.preparing_quiz'));
+      try {
+        const qRes = await fetch('/api/quiz', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({context: cfg.context, topic: cfg.topic, action: 'generate'})
+        });
+        const qData = await qRes.json();
+        startBtn.disabled = false; startBtn.textContent = t('btn.start_debate');
+        if (qData.questions && qData.questions.length > 0) { renderQuiz(qData.questions); return; }
+      } catch(qe) { startBtn.disabled = false; startBtn.textContent = t('btn.start_debate'); }
+    }
+  } catch(e) {}
+
+  launchDebate(pickerSelected);
+}
+
+// ── Config Editor Modal ──
+async function openEditorModal(file) {
+  if (file) {
+    selectedConfig = file;
+    const res = await fetch('/api/config?file=' + encodeURIComponent(file));
+    document.getElementById('yamlText').value = await res.text();
+    document.getElementById('editorTitle').textContent = file;
+    document.getElementById('deleteBtn').style.display = '';
+  } else {
+    selectedConfig = null;
+    document.getElementById('yamlText').value = DEFAULT_YAML;
+    document.getElementById('editorTitle').textContent = t('heading.new_config');
+    document.getElementById('deleteBtn').style.display = 'none';
+  }
+  document.getElementById('editorModal').classList.add('open');
+  switchTab('text');
+  trapFocus(document.querySelector('#editorModal .modal-panel'));
+}
+
+function closeEditorModal() { document.getElementById('editorModal').classList.remove('open'); }
+
+// Close modals on overlay click or Escape
+['startModal', 'editorModal', 'quizOverlay'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    ['startModal', 'editorModal', 'quizOverlay'].forEach(id => {
+      document.getElementById(id).classList.remove('open');
+    });
+  }
+});
+
+// ── Tab switching ──
+function switchTab(tab) {
+  const tabs = document.querySelectorAll('#editorTablist [role="tab"]');
+  tabs.forEach(el => { el.classList.remove('active'); el.setAttribute('aria-selected','false'); el.tabIndex = -1; });
+  document.getElementById('panel-yaml').hidden = true;
+  document.getElementById('panel-form').hidden = true;
+  if (tab === 'text') {
+    tabs[0].classList.add('active'); tabs[0].setAttribute('aria-selected','true'); tabs[0].tabIndex = 0;
+    document.getElementById('panel-yaml').hidden = false;
+  } else {
+    tabs[1].classList.add('active'); tabs[1].setAttribute('aria-selected','true'); tabs[1].tabIndex = 0;
+    document.getElementById('panel-form').hidden = false;
+    syncFormFromYaml();
+  }
+}
+
+// ── Form <-> YAML sync ──
+function syncFormFromYaml() {
+  const text = document.getElementById('yamlText').value;
+  const editor = document.getElementById('formEditor');
+  fetch('/api/parse-yaml', { method: 'POST', headers: {'Content-Type': 'text/plain'}, body: text })
+    .then(r => r.json()).then(cfg => {
+      if (cfg.error) { editor.innerHTML = `<p style="color:var(--danger)">${cfg.error}</p>`; return; }
+      renderForm(cfg);
+    });
+}
+
+function renderForm(cfg) {
+  const editor = document.getElementById('formEditor');
+  const agents = cfg.agents || [];
+  let html = `
+    <div class="form-group"><label>${t('label.topic')}</label>
+      <textarea class="form-input" id="fTopic" oninput="formChanged()">${cfg.topic || ''}</textarea></div>
+    <div class="form-group"><label>${t('label.context')}</label>
+      <textarea class="form-input system-prompt" id="fContext" oninput="formChanged()" placeholder="${t('placeholder.context')}">${cfg.context || ''}</textarea></div>
+    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div><label>${t('label.max_turns')}</label><input class="form-input" type="number" id="fMaxTurns" value="${cfg.max_turns || 20}" oninput="formChanged()"></div>
+      <div><label>${t('label.language')}</label><input class="form-input" id="fLanguage" value="${cfg.language || 'English'}" oninput="formChanged()"></div>
+      <div><label>${t('label.memory_mode')}</label>
+        <select class="form-input" id="fMemMode" onchange="formChanged()">
+          <option value="auto" ${(cfg.memory_mode||'auto')==='auto'?'selected':''}>${t('memory.auto')}</option>
+          <option value="co-resident" ${cfg.memory_mode==='co-resident'?'selected':''}>${t('memory.co_resident')}</option>
+          <option value="hot-swap" ${cfg.memory_mode==='hot-swap'?'selected':''}>${t('memory.hot_swap')}</option>
+        </select></div>
+    </div>
+    <div class="form-group"><label>${t('label.agents')}</label><div id="agentsList">`;
+  agents.forEach((a, i) => { html += renderAgentForm(a, i); });
+  html += `</div><button class="btn" onclick="addAgent()" style="margin-top:8px">${t('btn.add_agent')}</button></div>`;
+  editor.innerHTML = html;
+}
+
+const CLI_PRESETS = [
+  { label: () => t('preset.claude'), cmd: 'claude -p' },
+  { label: () => t('preset.claude_web'), cmd: 'claude -p --allowedTools WebSearch,WebFetch' },
+  { label: () => t('preset.gemini'), cmd: 'gemini -p' },
+  { label: () => t('preset.codex'), cmd: 'codex exec' },
+  { label: () => t('preset.custom'), cmd: '' },
+];
+
+function renderAgentForm(a, i) {
+  const cmdStr = Array.isArray(a.command) ? a.command.join(' ') : (a.command || '');
+  const presetOptions = CLI_PRESETS.map(p =>
+    `<option value="${p.cmd}" ${cmdStr === p.cmd ? 'selected' : ''}>${p.label()}</option>`).join('');
+  const isCustomCmd = !CLI_PRESETS.some(p => p.cmd === cmdStr);
+  return `
+    <div class="agent-form" id="agent-${i}">
+      <div class="agent-header">
+        <span class="agent-name">${a.name || 'new-agent'}</span>
+        <button class="remove-btn" onclick="removeAgent(${i})">&#x2715;</button>
+      </div>
+      <div class="form-row">
+        <div><label>${t('label.name')}</label><input class="form-input" data-field="name" value="${a.name || ''}" oninput="formChanged()"></div>
+        <div><label>${t('label.backend')}</label>
+          <select class="form-input" data-field="backend" onchange="onBackendChange(this, ${i}); formChanged()">
+            <option value="cli" ${a.backend==='cli'?'selected':''}>${t('backend.cli')}</option>
+            <option value="api" ${a.backend==='api'?'selected':''}>${t('backend.api')}</option>
+            <option value="mlx" ${a.backend==='mlx'?'selected':''}>${t('backend.mlx')}</option>
+            <option value="ollama" ${a.backend==='ollama'?'selected':''}>${t('backend.ollama')}</option>
+          </select></div>
+      </div>
+      <div class="form-row" id="cmd-row-${i}">
+        <div><label>${t('label.cli_tool')}</label>
+          <select class="form-input" data-field="preset" onchange="onPresetChange(this, ${i})">
+            ${presetOptions}
+            ${isCustomCmd ? `<option value="${cmdStr}" selected>${t('preset.custom')}</option>` : ''}
+          </select></div>
+        <div><label>${t('label.timeout')}</label><input class="form-input" type="number" data-field="timeout" value="${a.timeout || 120}" oninput="formChanged()"></div>
+      </div>
+      <div id="custom-cmd-${i}" style="${isCustomCmd ? '' : 'display:none'}">
+        <label>${t('label.custom_command')}</label>
+        <input class="form-input" data-field="command" value="${cmdStr}" oninput="formChanged()" placeholder="${t('placeholder.custom_cmd')}">
+      </div>
+      <div id="model-field-${i}" style="${a.backend !== 'cli' ? '' : 'display:none'}">
+        <label>${t('label.model')}</label>
+        <input class="form-input" data-field="model" value="${a.model || ''}" oninput="formChanged()">
+      </div>
+      <div id="api-fields-${i}" style="${a.backend === 'api' ? '' : 'display:none'}">
+        <div class="form-row">
+          <div><label>${t('label.base_url')}</label><input class="form-input" data-field="base_url" value="${a.base_url || 'http://localhost:8000/v1'}" oninput="formChanged()"></div>
+          <div><label>${t('label.api_key')}</label><input class="form-input" data-field="api_key" value="${a.api_key || 'none'}" oninput="formChanged()" type="password"></div>
+        </div>
+      </div>
+      <div><label>${t('label.system_prompt')}</label><textarea class="form-input system-prompt" data-field="system" oninput="formChanged()">${a.system || ''}</textarea></div>
+    </div>`;
+}
+
+function onBackendChange(sel, i) {
+  const b = sel.value;
+  document.getElementById('cmd-row-' + i).style.display = b === 'cli' ? '' : 'none';
+  document.getElementById('model-field-' + i).style.display = b !== 'cli' ? '' : 'none';
+  const af = document.getElementById('api-fields-' + i);
+  if (af) af.style.display = b === 'api' ? '' : 'none';
+}
+function onPresetChange(sel, i) {
+  const cd = document.getElementById('custom-cmd-' + i), ci = cd.querySelector('[data-field="command"]');
+  if (sel.value === '') { cd.style.display = ''; ci.value = ''; ci.focus(); }
+  else { cd.style.display = 'none'; ci.value = sel.value; }
+  formChanged();
+}
+function addAgent() {
+  const list = document.getElementById('agentsList'), i = list.children.length;
+  list.insertAdjacentHTML('beforeend', renderAgentForm({ name: 'new-agent', backend: 'cli', command: ['claude', '-p'], timeout: 120, system: '' }, i));
+  formChanged();
+}
+function removeAgent(i) { document.getElementById(`agent-${i}`).remove(); formChanged(); }
+
+function formChanged() {
+  const topic = document.getElementById('fTopic')?.value || '';
+  const context = document.getElementById('fContext')?.value || '';
+  const language = document.getElementById('fLanguage')?.value || 'English';
+  const maxTurns = parseInt(document.getElementById('fMaxTurns')?.value || '20');
+  const memMode = document.getElementById('fMemMode')?.value || 'auto';
+  const agents = [];
+  document.querySelectorAll('#editorModal .agent-form').forEach(af => {
+    const get = (f) => af.querySelector(`[data-field="${f}"]`)?.value || '';
+    const backend = get('backend');
+    const preset = af.querySelector('[data-field="preset"]')?.value || '';
+    const customCmd = get('command');
+    const cmdRaw = backend === 'cli' ? (preset || customCmd) : '';
+    const agent = { name: get('name'), backend, timeout: parseInt(get('timeout') || '120'), system: get('system') };
+    if (backend === 'cli') agent.command = cmdRaw.split(/\s+/).filter(Boolean);
+    else {
+      agent.model = get('model');
+      if (backend === 'api') { const bu = get('base_url'), ak = get('api_key'); if (bu) agent.base_url = bu; if (ak && ak !== 'none') agent.api_key = ak; }
+    }
+    agents.push(agent);
+    af.querySelector('.agent-name').textContent = get('name') || 'agent';
+  });
+  fetch('/api/to-yaml', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ topic, context: context || undefined, language, max_turns: maxTurns, memory_mode: memMode, agents })
+  }).then(r => r.text()).then(y => { document.getElementById('yamlText').value = y; });
+}
+
+// ── Save / Delete / Copy / Paste ──
+async function saveConfig() {
+  const text = document.getElementById('yamlText').value;
+  if (!text.trim()) { toast(t('toast.nothing_save'), 'var(--red)'); return; }
+  let name = selectedConfig;
+  if (!name) { name = prompt(t('msg.config_filename')); if (!name) return; name = name.replace(/\.yaml$/, '') + '.yaml'; selectedConfig = name; }
+  const res = await fetch('/api/config?file=' + encodeURIComponent(name), { method: 'POST', headers: {'Content-Type': 'text/plain'}, body: text });
+  if (res.ok) {
+    toast(t('toast.saved', {name}));
+    document.getElementById('editorTitle').textContent = name;
+    document.getElementById('deleteBtn').style.display = '';
+    loadConfigs();
+  } else { toast(t('toast.save_failed'), 'var(--red)'); }
+}
+
+async function deleteCurrentConfig() {
+  if (!selectedConfig || !confirm('Delete ' + selectedConfig + '?')) return;
+  const res = await fetch('/api/config?file=' + encodeURIComponent(selectedConfig), {method: 'DELETE'});
+  if (res.ok) { toast(t('toast.deleted')); closeEditorModal(); loadConfigs(); }
+  else { toast(t('toast.delete_failed'), 'var(--red)'); }
+}
+
+async function copyConfig() {
+  const text = document.getElementById('yamlText').value;
+  if (!text.trim()) { toast(t('toast.nothing_copy'), 'var(--red)'); return; }
+  try { await navigator.clipboard.writeText(text); } catch(e) {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  }
+  toast(t('toast.copied'));
+}
+
+async function pasteConfig() {
+  try { document.getElementById('yamlText').value = await navigator.clipboard.readText(); syncFormFromYaml(); toast(t('toast.pasted')); }
+  catch(e) { toast(t('toast.clipboard_denied'), 'var(--red)'); }
+}
+
+// ── Start / Stop debate ──
+let pendingDebateFile = null;
+
+function renderQuiz(questions) {
+  const container = document.getElementById('quizQuestions');
+  container.innerHTML = questions.map((q, i) => {
+    const options = (q.options || []).map(opt =>
+      `<label style="display:flex;align-items:center;padding:8px 12px;margin:4px 0;cursor:pointer;border-radius:var(--radius-sm);border:1px solid var(--border);transition:all 0.15s;background:var(--bg);">
+        <input type="radio" name="quiz-${i}" value="${opt}" style="margin-right:10px;">
+        <span style="font-size:13px;color:var(--text-secondary);">${opt}</span>
+      </label>`
+    ).join('');
+    return `
+      <div style="margin-bottom:16px;padding:18px;background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--primary);border-radius:var(--radius-md);">
+        <div style="font-size:14px;font-weight:500;margin-bottom:12px;color:var(--text);">${i+1}. ${q.question}</div>
+        ${options}
+        <input type="text" placeholder="Or type your own answer..." data-quiz="${i}"
+          class="form-input" style="margin-top:10px;">
+      </div>`;
+  }).join('');
+  window._quizQuestions = questions;
+  document.getElementById('quizOverlay').classList.add('open');
+}
+
+async function submitQuiz() {
+  const questions = window._quizQuestions || [];
+  const answers = questions.map((q, i) => {
+    const selected = document.querySelector(`input[name="quiz-${i}"]:checked`);
+    const custom = document.querySelector(`input[data-quiz="${i}"]`).value;
+    return { question: q.question, answer: custom || (selected ? selected.value : 'No answer') };
+  });
+  const generalComment = document.getElementById('quizGeneralComment')?.value?.trim();
+  if (generalComment) answers.push({question: 'Additional context from user', answer: generalComment});
+
+  document.getElementById('quizOverlay').classList.remove('open');
+  toast(t('toast.enriching'));
+
+  try {
+    const cfgRes = await fetch('/api/config?file=' + encodeURIComponent(pendingDebateFile));
+    const cfgText = await cfgRes.text();
+    const parseRes = await fetch('/api/parse-yaml', { method: 'POST', headers: {'Content-Type': 'text/plain'}, body: cfgText });
+    const cfg = await parseRes.json();
+
+    const enrichRes = await fetch('/api/quiz', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({context: cfg.context || '', action: 'answer', answers})
+    });
+    const enrichData = await enrichRes.json();
+
+    if (enrichData.enriched_context) {
+      cfg.context = enrichData.enriched_context;
+      const yamlRes = await fetch('/api/to-yaml', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(cfg) });
+      const newYaml = await yamlRes.text();
+      await fetch('/api/config?file=' + encodeURIComponent(pendingDebateFile), { method: 'POST', headers: {'Content-Type': 'text/plain'}, body: newYaml });
+    }
+  } catch(e) { toast(t('toast.enrich_failed')); }
+
+  if (window._continueMode && window._continueDir) {
+    const answerText = answers.map(a => `Q: ${a.question}\nA: ${a.answer}`).join('\n\n');
+    const res = await fetch('/api/continue', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({debate_dir: window._continueDir, message: answerText, turns: 6}) });
+    const result = await res.json();
+    window._continueMode = false;
+    if (result.ok) { toast(t('toast.debate_continued')); window.location.href = '/debate'; }
+    else { toast(result.error || t('toast.start_failed'), 'var(--red)'); }
+  } else {
+    launchDebate(pendingDebateFile);
+  }
+}
+
+function skipQuiz() {
+  document.getElementById('quizOverlay').classList.remove('open');
+  if (window._continueMode && window._continueDir) {
+    window._continueMode = false;
+    const msg = prompt(t('msg.continue_direction')) || t('msg.continue_default');
+    fetch('/api/continue', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({debate_dir: window._continueDir, message: msg, turns: 6}) })
+      .then(r => r.json()).then(result => { if (result.ok) { toast('Debate continued'); window.location.href = '/debate'; } });
+  } else {
+    launchDebate(pendingDebateFile);
+  }
+}
+
+async function launchDebate(file) {
+  const res = await fetch('/api/start', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({config: file}) });
+  const result = await res.json();
+  if (result.ok) { toast(t('toast.debate_started')); updateStatus(); window.location.href = '/debate'; }
+  else { toast(result.error || t('toast.start_failed'), 'var(--red)'); }
+}
+
+async function stopDebate() {
+  await fetch('/api/stop', {method: 'POST'});
+  toast(t('toast.debate_stopped'));
+  setTimeout(updateStatus, 500);
+}
+
+async function updateStatus() {
+  const res = await fetch('/api/status');
+  const st = await res.json();
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const viewBtn = document.getElementById('viewBtn');
+  if (st.running) {
+    dot.className = 'status-dot running';
+    text.textContent = t('status.running') + (st.config ? ': ' + st.config : '');
+    startBtn.disabled = true;
+    stopBtn.style.display = ''; viewBtn.style.display = '';
+  } else {
+    dot.className = 'status-dot idle';
+    text.textContent = t('status.idle');
+    startBtn.disabled = false;
+    stopBtn.style.display = 'none'; viewBtn.style.display = 'none';
+  }
+}
+
+// ── Last debate card ──
+async function loadLastDebate() {
+  try {
+    const res = await fetch('/api/debates');
+    const debates = await res.json();
+    const el = document.getElementById('lastDebate');
+    if (!debates.length) { el.style.display = 'none'; return; }
+    const d = debates[0];
+    const date = d.date ? new Date(d.date).toLocaleString() : '';
+    const agentNames = (d.agents||[]).map(a => a.name);
+    const agentTags = agentNames.map(n => `<span class="agent-tag">${n}</span>`).join('');
+    const agentMore = agentNames.length > 3
+      ? `<span class="agent-more" aria-label="${agentNames.slice(3).join(', ')}">+${agentNames.length - 3}</span>` : '';
+    const badge = d.has_decision ? '<span class="badge green">' + t('badge.decision_ready') + '</span>' : '';
+    const chain = d.parent_debate ? '<span class="badge yellow">' + t('badge.continuation') + '</span> ' : '';
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div class="ld-label">${t('debate.latest')}</div>
+      <div class="ld-topic">${d.topic || d.dir}</div>
+      <div class="ld-meta">${chain}${date} &middot; ${t('debate.turns_count', {n: d.turns||0})} &middot; <span class="agents-list">${agentTags}${agentMore}</span> ${badge}</div>`;
+    el.onclick = () => window.location.href = '/history/' + d.dir;
+  } catch(e) {}
+}
+
+const DEFAULT_YAML = `# Debate Config
+# See configs/*.yaml for full examples
+
+topic: |
+  Your debate topic here — be specific and debatable.
+
+max_turns: 20
+language: English
+memory_mode: auto
+anti_consensus: true
+
+# context: |
+#   Paste background material here — all agents will read this.
+
+# orchestration:
+#   turn_order: [advocate, critic, judge]
+#   phase_plan:
+#     - phase: 1
+#       turns: 1-8
+#       objective: Establish positions
+#     - phase: 2
+#       turns: 9-16
+#       objective: Challenge and stress-test
+#     - phase: 3
+#       turns: 17-20
+#       objective: Converge on recommendation
+#   final_output_contract: |
+#     1. Recommended path
+#     2. What not to do
+#     3. Conditions for revisiting
+#     4. 90-day action plan
+
+agents:
+
+  - name: advocate
+    backend: cli
+    command: ["claude", "-p", "--allowedTools", "WebSearch,WebFetch"]
+    timeout: 180
+    turn_budget: 8
+    system: |
+      You argue FOR the proposal. Be specific, use evidence,
+      cite sources via web search. 5-7 sentences per turn.
+
+  - name: critic
+    backend: cli
+    command: ["claude", "-p"]
+    timeout: 180
+    turn_budget: 8
+    system: |
+      You find weaknesses. One concrete issue per turn.
+      Quote the exact claim you are challenging.
+      5-7 sentences per turn.
+`;
+
+// Init
+I18N.onReady(() => {
+  const sel = document.getElementById('langSelect');
+  if (sel) sel.value = I18N.getLang();
+});
+loadConfigs();
+loadLastDebate();
+updateStatus();
+setInterval(updateStatus, 5000);
+initTabs(document.getElementById('editorTablist'));
+</script>
+</body>
+</html>

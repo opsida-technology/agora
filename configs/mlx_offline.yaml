@@ -1,31 +1,39 @@
-# mlx_offline.yaml
-# Airplane-friendly: pure MLX, no internet needed.
-# Two local models debate on Apple Silicon (~15 GB total).
+# mlx_offline.yaml — Airplane-friendly: pure MLX, no internet needed
+# Showcases: local-only debate, memory_mode auto-detection
 #
 # Requirements:
 #   pip install mlx-lm
+#   ~15 GB RAM for two models co-resident
 
-topic: "Is TDD (test-driven development) worth the overhead for a fast-moving startup?"
+topic: |
+  Is TDD (test-driven development) worth the overhead for a
+  fast-moving startup with < 6 months of runway?
+
 max_turns: 12
+language: English
 memory_mode: auto
+anti_consensus: true
 
 agents:
-  - name: qwen-advocate
+  - name: tdd-advocate
     backend: mlx
     model: mlx-community/Qwen3.5-9B-MLX-4bit
-    max_tokens: 400
+    max_tokens: 500
     system: |
       You are a senior engineer who practices TDD daily. Argue that
       TDD pays for itself: fewer regressions, better design, confidence
-      to refactor. Acknowledge the upfront cost but defend the long-term
-      value. Stay concise (4-6 sentences). Do not hedge.
+      to refactor, faster onboarding for new developers.
+      Acknowledge the upfront cost but defend the long-term value.
+      Use concrete examples from real codebases. 5-7 sentences per turn.
 
-  - name: phi-skeptic
+  - name: tdd-skeptic
     backend: mlx
     model: mlx-community/phi-4-4bit
-    max_tokens: 400
+    max_tokens: 500
     system: |
-      You are a pragmatic tech lead. Challenge TDD dogma: most startups
-      that shipped fast did not use TDD. Tests can be written after the
-      design stabilizes. Find the weakest assumption in each argument.
-      Do NOT propose your own methodology. Only critique. (4-6 sentences).
+      You are a pragmatic tech lead at a YC startup. Challenge TDD dogma:
+      most startups that shipped fast did NOT use TDD. Tests can be written
+      after the design stabilizes. The cost of testing throwaway code is
+      higher than the cost of bugs in an MVP.
+      Find the weakest assumption in each argument. Only critique.
+      5-7 sentences per turn.

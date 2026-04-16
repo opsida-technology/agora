@@ -1,6 +1,7 @@
 """
 agora.agent — Agent: a named participant backed by a model.
 """
+from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Callable
 
@@ -13,7 +14,9 @@ class Agent:
     name: str
     system: str
     backend: Backend
+    turn_budget: int | None = None
     yielded: bool = False
+    min_turns_before_yield: int = 1  # set by debate runner
     stats: dict = field(default_factory=lambda: {"turns": 0, "intents": {}})
 
     def speak(self, topic: str, history: list[Message], turn: int,
@@ -31,7 +34,9 @@ class Agent:
                 self.system, topic, history, self.name)
 
         msg = parse_reply(raw, self.name, turn)
-        if turn > 1 and (msg.intent == "yield" or msg.next_action == "yield"):
+        # Yield only allowed after min_turns_before_yield
+        if (self.stats["turns"] >= self.min_turns_before_yield
+                and (msg.intent == "yield" or msg.next_action == "yield")):
             self.yielded = True
         self.stats["turns"] += 1
         self.stats["intents"][msg.intent] = \

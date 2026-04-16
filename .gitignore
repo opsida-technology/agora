@@ -6,7 +6,12 @@ dist/
 build/
 .venv/
 venv/
+.pytest_cache/
 debates/
-configs/_temp.yaml
-configs/manufacturing_models.yaml
-configs/Opsida*.yaml
+configs/*
+!configs/hybrid.yaml
+!configs/mlx_offline.yaml
+!configs/ollama_local.yaml
+!configs/code_review.yaml
+!configs/startup_strategy.yaml
+!configs/tech_choice.yaml

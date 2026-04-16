@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Agora Debate</title>
+<link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+<link rel="stylesheet" href="/static/base.css">
+<script src="/static/base.js"></script>
+<script src="/static/i18n.js"></script>
+<style>
+  /* Aliases — base.css has the canonical tokens */
+  :root {
+    --accent: var(--primary); --card: var(--surface);
+    --green: var(--success); --yellow: var(--warning); --red: var(--danger);
+    --gray: var(--dim);
+  }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: "cv02","cv03","cv04","cv11";
+    background: var(--bg); color: var(--text); line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Layout shell ─────────────────────────────── */
+  .app-shell { display: flex; flex-direction: column; min-height: 100vh; }
+  .top-bar {
+    position: sticky; top: 0; z-index: 100; background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .top-bar-right { display: flex; align-items: center; gap: 8px; }
+  .back-link {
+    color: var(--text-secondary); font-size: 13px; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 8px; min-height: 44px;
+    background: var(--card); border: 1px solid var(--border);
+    transition: all 0.2s;
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); background: var(--primary-glow); }
+  .ctrl-btn {
+    padding: 8px 16px; border-radius: 8px; background: none;
+    font-size: 12px; cursor: pointer; border: 1px solid; transition: all 0.2s;
+    min-height: 44px; min-width: 44px; /* WCAG touch target */
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .ctrl-btn:hover { filter: brightness(1.2); }
+
+  /* ── Main split layout ────────────────────────── */
+  .main-layout {
+    display: flex; flex: 1; overflow: hidden;
+  }
+  .debate-pane {
+    flex: 1; overflow-y: auto; padding: 20px;
+    padding-bottom: 70px; /* space for fixed intervene bar */
+    display: flex; gap: 0;
+    overscroll-behavior: contain;
+  }
+  .chart-pane {
+    width: 35%; min-width: 280px; max-width: 420px;
+    border-left: 1px solid var(--border);
+    background: var(--surface); overflow-y: auto;
+    position: sticky; top: 0; height: 100vh;
+    display: none; flex-direction: column;
+  }
+  .chart-pane.visible { display: flex; }
+  .chart-pane-header {
+    padding: 16px 18px 10px; font-size: 11px; color: var(--dim);
+    text-transform: uppercase; letter-spacing: 2px; font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .chart-pane-body { flex: 1; padding: 12px; overflow-y: auto; }
+  #chartCanvas {
+    width: 100%; background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  /* ── Timeline (left rail) ─────────────────────── */
+  .timeline {
+    width: 40px; flex-shrink: 0; position: relative;
+    display: flex; flex-direction: column; align-items: center;
+    padding-top: 8px;
+  }
+  .timeline-line {
+    position: absolute; top: 0; bottom: 0; left: 50%; width: 2px;
+    background: var(--border); transform: translateX(-50%);
+  }
+  .timeline-dot {
+    position: relative; z-index: 2; width: 14px; height: 14px;
+    border-radius: 50%; cursor: pointer; border: 2px solid var(--bg);
+    transition: transform 0.2s; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .timeline-dot:hover { transform: scale(1.4); }
+  .timeline-dot .dot-num {
+    font-size: 7px; font-weight: 700; color: var(--bg); line-height: 1;
+  }
+
+  /* ── Turns column ─────────────────────────────── */
+  .turns-col {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px;
+    padding-left: 12px;
+    overflow-anchor: none; /* prevent layout shift during SSE streaming */
+  }
+  .turns-col > :last-child { overflow-anchor: auto; } /* anchor to last element */
+
+  /* ── Header card ──────────────────────────────── */
+  #header {
+    border: 1px solid var(--border); border-radius: 16px;
+    padding: 20px 24px; background: linear-gradient(135deg, var(--surface) 0%, var(--card) 100%);
+    position: relative; overflow: hidden; display: none;
+  }
+  #header::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--emerald), var(--cyan), var(--accent));
+  }
+  #header h1 { color: var(--accent); font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 3px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px; }
+  #header h1::before {
+    content: ''; display: inline-block; width: 8px; height: 8px;
+    background: linear-gradient(135deg, var(--emerald), var(--cyan)); border-radius: 50%;
+  }
+  .header-body { display: flex; align-items: flex-start; gap: 20px; }
+  .header-info { flex: 1; }
+  #topic { font-size: 16px; font-weight: 500; margin-bottom: 10px; color: var(--text); line-height: 1.5; }
+  #agents-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+  .agent-chip {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 12px; font-size: 11px;
+    display: flex; align-items: center; gap: 6px;
+    transition: all 0.2s;
+  }
+  .agent-chip:hover { border-color: var(--dim); background: var(--surface); }
+  .agent-chip .avatar {
+    width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px; font-weight: 700; color: var(--text); flex-shrink: 0;
+  }
+  .agent-chip .name { font-weight: 600; }
+  .agent-chip .model { color: var(--dim); margin-left: 2px; }
+  #meta { color: var(--dim); font-size: 11px; margin-top: 8px; }
+
+  /* ── Progress ring ────────────────────────────── */
+  .progress-ring-wrap {
+    flex-shrink: 0; width: 72px; height: 72px; position: relative;
+  }
+  .progress-ring-wrap svg { width: 72px; height: 72px; transform: rotate(-90deg); }
+  .progress-ring-bg { fill: none; stroke: var(--border); stroke-width: 4; }
+  .progress-ring-fill {
+    fill: none; stroke-width: 4; stroke-linecap: round;
+    stroke: url(#progressGrad);
+    transition: stroke-dashoffset 0.6s ease;
+  }
+  .progress-ring-text {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: var(--text); line-height: 1.2;
+  }
+  .progress-ring-text .turn-label-sm { font-size: 8px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
+
+  /* ── Agent status bar ─────────────────────────── */
+  #agentStatusBar {
+    display: none; gap: 8px; flex-wrap: wrap; padding: 0; margin: 0;
+  }
+  .agent-pill {
+    padding: 5px 12px; border-radius: 20px; font-size: 11px;
+    border: 1px solid var(--border); background: var(--border);
+    color: var(--text); transition: all 0.3s; display: flex; align-items: center; gap: 6px;
+    position: relative;
+  }
+  .agent-pill .pill-avatar {
+    width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 7px; font-weight: 700; color: var(--text); flex-shrink: 0;
+  }
+  .agent-pill.speaking { animation: none; }
+  .agent-pill.speaking::after {
+    content: ''; position: absolute; inset: -3px; border-radius: 24px;
+    border: 2px solid; opacity: 0; animation: pulseRing 1.5s ease-out infinite;
+  }
+  @keyframes pulseRing {
+    0% { opacity: 0.6; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.15); }
+  }
+
+  /* ── Turn bubbles (chat style) ────────────────── */
+  .turn-wrap {
+    display: flex; align-items: flex-start; gap: 10px;
+    max-width: 85%; transition: all 0.3s ease;
+    cursor: pointer;
+  }
+  .turn-wrap.pos-left { align-self: flex-start; }
+  .turn-wrap.pos-right { align-self: flex-end; flex-direction: row-reverse; }
+  .turn-wrap.pos-center { align-self: center; max-width: 92%; }
+  .turn-wrap.dimmed { opacity: 0.45; filter: saturate(0.6); }
+  .turn-wrap.focused { opacity: 1; filter: none; max-width: 100%; }
+
+  .turn-avatar {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--text); margin-top: 4px;
+  }
+
+  .turn {
+    flex: 1; min-width: 0; padding: 14px 18px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; position: relative;
+    transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    border-left: 4px solid transparent;
+  }
+  .turn-wrap.pos-left .turn { border-radius: 4px 16px 16px 16px; }
+  .turn-wrap.pos-right .turn { border-radius: 16px 4px 16px 16px; border-left: none; border-right: 4px solid transparent; }
+  .turn-wrap.pos-center .turn { border-radius: 16px; background: #1e293b; }
+
+  .turn.active {
+    box-shadow: 0 0 20px var(--primary-glow), 0 0 40px var(--primary-glow);
+    animation: turnGlow 2s ease-in-out infinite;
+  }
+  @keyframes turnGlow {
+    0%, 100% { box-shadow: 0 0 20px var(--primary-glow); }
+    50% { box-shadow: 0 0 30px rgba(59,130,246,0.25), 0 0 60px var(--primary-glow); }
+  }
+  .turn.closing { border-color: var(--yellow); }
+
+  /* Intent border colors */
+  .turn.intent-propose { border-left-color: var(--primary); }
+  .turn.intent-critique { border-left-color: var(--danger); }
+  .turn.intent-defend { border-left-color: var(--orange); }
+  .turn.intent-synthesize { border-left-color: var(--purple); }
+  .turn.intent-question { border-left-color: var(--cyan); }
+  .turn.intent-concede { border-left-color: var(--emerald); }
+  .turn.intent-yield { border-left-color: var(--dim); }
+  .turn-wrap.pos-right .turn.intent-propose { border-right-color: var(--primary); }
+  .turn-wrap.pos-right .turn.intent-critique { border-right-color: var(--danger); }
+  .turn-wrap.pos-right .turn.intent-defend { border-right-color: var(--orange); }
+  .turn-wrap.pos-right .turn.intent-synthesize { border-right-color: var(--purple); }
+  .turn-wrap.pos-right .turn.intent-question { border-right-color: var(--cyan); }
+  .turn-wrap.pos-right .turn.intent-concede { border-right-color: var(--emerald); }
+  .turn-wrap.pos-right .turn.intent-yield { border-right-color: var(--dim); }
+
+  /* Addressed-to-specific slightly lighter bg */
+  .turn.addr-specific { background: #243447; }
+
+  .turn-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 8px; font-size: 12px;
+  }
+  .turn-num {
+    color: var(--dim); font-family: 'JetBrains Mono','SF Mono', monospace;
+    font-size: 10px; background: var(--bg); padding: 2px 7px; border-radius: 6px;
+  }
+  .turn-name { color: var(--text); font-weight: 600; }
+  .turn-addressed { color: var(--dim); font-size: 11px; font-style: italic; }
+  .turn-label {
+    font-size: 10px; font-weight: 600; border-radius: 6px; padding: 2px 8px;
+    background: var(--warning-bg); color: var(--yellow);
+    border: 1px solid rgba(234,179,8,0.25);
+  }
+  .collapse-icon {
+    margin-left: auto; color: var(--dim);
+    font-size: 14px; font-weight: 300; user-select: none;
+  }
+  .turn-content {
+    font-size: 14px; white-space: pre-wrap; word-wrap: break-word;
+    min-height: 1.4em; color: var(--text-secondary); line-height: 1.7;
+  }
+  .turn-content.md { white-space: normal; }
+  .turn-content.md h1,.turn-content.md h2,.turn-content.md h3 {
+    color: var(--text); margin: 12px 0 6px; font-size: 15px; font-weight: 600; }
+  .turn-content.md h2 { font-size: 14px; }
+  .turn-content.md h3 { font-size: 13px; color: var(--text-secondary); }
+  .turn-content.md p { margin: 6px 0; }
+  .turn-content.md strong { color: var(--text); }
+  .turn-content.md a { color: var(--accent); text-decoration: none; transition: color 0.15s; }
+  .turn-content.md a:hover { color: var(--cyan); text-decoration: underline; }
+  .turn-content.md code {
+    background: var(--bg); padding: 2px 6px; border-radius: 4px;
+    font-size: 12px; font-family: 'JetBrains Mono','SF Mono', monospace;
+    border: 1px solid var(--border); }
+  .turn-content.md pre {
+    background: var(--bg); padding: 12px 14px; border-radius: 10px;
+    overflow-x: auto; margin: 8px 0; border: 1px solid var(--border);
+    font-family: 'JetBrains Mono','SF Mono', monospace; }
+  .turn-content.md pre code { padding: 0; border: none; }
+  .turn-content.md ul,.turn-content.md ol { padding-left: 20px; margin: 6px 0; }
+  .turn-content.md li { margin: 3px 0; }
+  .turn-content.md hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+
+  /* ── Directive badges ─────────────────────────── */
+  .directives { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; font-size: 10px; }
+  .dir-badge {
+    border-radius: 6px; padding: 2px 8px; border: 1px solid var(--border);
+    font-weight: 500; transition: transform 0.15s;
+  }
+  .dir-badge:hover { transform: scale(1.05); }
+  .dir-badge.intent {
+    background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(16,185,129,0.08));
+    border-color: rgba(34,197,94,0.3); color: var(--green); }
+  .dir-badge.addressed {
+    background: linear-gradient(135deg, rgba(168,85,247,0.12), rgba(139,92,246,0.08));
+    border-color: rgba(168,85,247,0.3); color: var(--purple); }
+  .dir-badge.next {
+    background: linear-gradient(135deg, var(--warning-bg), rgba(245,158,11,0.08));
+    border-color: var(--warning-bg); color: var(--yellow); }
+  .dir-badge.yielded {
+    background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.08));
+    border-color: var(--danger-bg); color: var(--red); }
+  .dir-badge.invited {
+    background: linear-gradient(135deg, var(--primary-glow), rgba(6,182,212,0.08));
+    border-color: var(--primary-glow); color: var(--accent); }
+  .dir-badge.closing {
+    background: linear-gradient(135deg, var(--warning-bg), rgba(245,158,11,0.08));
+    border-color: var(--warning-bg); color: var(--yellow); }
+
+  /* ── L1: Phase divider (full width) ────────────── */
+  .phase-divider {
+    align-self: stretch; text-align: center; padding: 14px 0; margin: 8px 0;
+    position: relative;
+  }
+  .phase-divider::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 50%;
+    height: 1px; background: linear-gradient(90deg, transparent, var(--accent), var(--cyan), transparent);
+  }
+  .phase-divider .phase-pill {
+    position: relative; z-index: 1; display: inline-block;
+    padding: 4px 16px; border-radius: 9999px; font-size: 11px; font-weight: 600;
+    background: var(--bg); border: 1px solid var(--accent);
+    color: var(--primary-text); letter-spacing: 0.5px;
+  }
+
+  /* ── L2: System notices (moderator, yield, human-needed, saved) ── */
+  .system-notice {
+    border-radius: 10px; padding: 10px 16px; margin: 0; font-size: 12px;
+    align-self: center; max-width: 85%;
+    background: var(--surface); border: 1px solid var(--border);
+  }
+  .system-notice .notice-label { font-weight: 600; }
+  .system-notice.yield {
+    border-color: var(--warning-bg);
+    background: linear-gradient(var(--surface), var(--surface)) padding-box,
+                linear-gradient(135deg, var(--warning), var(--orange)) border-box;
+    border: 1px solid transparent;
+  }
+  .system-notice.yield .notice-label { color: var(--warning); }
+  .system-notice.human-needed {
+    border-color: var(--orange); background: rgba(249,115,22,0.06);
+    animation: pulseNotice 2s ease-in-out infinite;
+  }
+  .system-notice.human-needed .notice-label { color: var(--orange); }
+  @keyframes pulseNotice {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.2); }
+    50% { box-shadow: 0 0 0 6px rgba(249,115,22,0); }
+  }
+  .system-notice.moderator {
+    border-color: var(--primary-glow); background: var(--primary-glow);
+  }
+  .system-notice.moderator .notice-label { color: var(--primary-text); }
+  .system-notice.saved {
+    border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.05);
+  }
+  .system-notice.saved .notice-label { color: var(--success); }
+
+  /* backward compat alias */
+  .yield-notice { /* keep for any remaining references */
+    border-radius: 10px; padding: 10px 16px; margin: 0; font-size: 12px;
+    align-self: center; max-width: 85%;
+    background: var(--surface); border: 1px solid var(--border);
+  }
+  .yield-notice .name { color: var(--warning); font-weight: 600; }
+
+  /* ── Summary ──────────────────────────────────── */
+  #summary {
+    border: 1px solid var(--border); border-radius: 16px;
+    padding: 18px; background: var(--card); display: none;
+    align-self: center; max-width: 92%;
+  }
+  #summary h2 { font-size: 12px; color: var(--dim); text-transform: uppercase;
+    letter-spacing: 2px; margin-bottom: 12px; font-weight: 600; }
+  #summary table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #summary th { text-align: left; color: var(--text-secondary); font-weight: 600;
+    padding: 6px 10px; border-bottom: 2px solid var(--border);
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+  #summary td { padding: 6px 10px; color: var(--text-secondary); }
+  #summary tr:nth-child(even) td { background: var(--border); }
+  #summary tr:hover td { background: var(--primary-glow); }
+  #summary .agent-name { color: var(--emerald); font-weight: 600; }
+
+  /* ── Decision modal ───────────────────────────── */
+  .decision-modal-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  }
+  .decision-modal-overlay.visible { opacity: 1; pointer-events: auto; }
+  .decision-modal {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px 32px; max-width: 680px; width: 90%;
+    max-height: 80vh; overflow-y: auto; position: relative;
+    overscroll-behavior: contain;
+  }
+  .decision-modal::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--emerald), var(--cyan));
+    border-radius: 16px 16px 0 0;
+  }
+  .decision-modal h2 { color: var(--emerald); font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 3px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px; }
+  .decision-modal h2::before {
+    content: ''; display: inline-block; width: 8px; height: 8px;
+    background: linear-gradient(135deg, var(--emerald), var(--cyan)); border-radius: 50%;
+  }
+  #decision-content { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+  #decision-content h1,#decision-content h2,#decision-content h3 {
+    color: var(--text); margin: 14px 0 6px; font-size: 15px; font-weight: 600; }
+  #decision-content h2 { font-size: 14px; }
+  #decision-content p { margin: 6px 0; }
+  #decision-content strong { color: var(--text); }
+  #decision-content a { color: var(--accent); transition: color 0.15s; }
+  #decision-content a:hover { color: var(--cyan); }
+  #decision-content ul,#decision-content ol { padding-left: 20px; margin: 6px 0; }
+  #decision-content li { margin: 3px 0; }
+  #decision-content code {
+    background: var(--bg); padding: 2px 6px; border-radius: 4px; font-size: 12px;
+    font-family: 'JetBrains Mono','SF Mono', monospace; border: 1px solid var(--border); }
+  .decision-close-btn {
+    margin-top: 18px; padding: 8px 24px; border-radius: 8px;
+    background: var(--accent); color: var(--text); border: none;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .decision-close-btn:hover { filter: brightness(1.15); }
+  #viewDecisionBtn {
+    display: none; padding: 5px 14px; border-radius: 8px;
+    background: rgba(16,185,129,0.12); color: var(--emerald);
+    border: 1px solid var(--success-bg); font-size: 12px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  #viewDecisionBtn:hover { background: rgba(16,185,129,0.2); }
+
+  /* ── Intervene bar ────────────────────────────── */
+  #interveneBar {
+    display: none; padding: 10px 20px;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+    background: var(--bg); border-top: 1px solid var(--border);
+  }
+  #interveneBar.visible { display: block !important; }
+  #interveneBar form { display: flex; gap: 8px; max-width: 900px; margin: 0 auto; }
+  #interveneBar input {
+    flex: 1; padding: 10px 14px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); font-size: 14px; outline: none;
+  }
+  #interveneBar input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--primary-glow); }
+  #interveneBar button[type=submit] {
+    padding: 10px 20px; background: var(--accent); color: var(--text); border: none;
+    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    min-height: 44px; min-width: 44px;
+  }
+  #interveneBar.human-needed {
+    border-top: 2px solid #f97316;
+    background: linear-gradient(180deg, var(--warning-bg) 0%, var(--bg) 100%);
+  }
+
+  /* ── Status spinner ───────────────────────────── */
+  #status {
+    color: var(--dim); font-size: 13px; text-align: center; padding: 48px 0;
+  }
+  #status .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid var(--primary-glow); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .8s linear infinite;
+    margin-right: 8px; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Mobile progress chip ─────────────────────── */
+  .mobile-progress {
+    display: none; align-items: center; gap: 8px;
+    position: sticky; top: 0; z-index: 10;
+    padding: 6px 12px; margin: -6px -2px 8px;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--dim);
+  }
+  .mobile-progress .mp-bar {
+    flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden;
+  }
+  .mobile-progress .mp-fill {
+    height: 100%; background: linear-gradient(90deg, var(--primary), var(--info));
+    border-radius: 2px; transition: width 0.4s ease;
+  }
+  .mobile-progress .mp-label { font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+
+  /* ── Mobile chart toggle ──────────────────────── */
+  .chart-mobile-toggle {
+    display: none; align-self: center; margin: 12px 0; padding: 8px 20px;
+    border-radius: 8px; background: var(--card); border: 1px solid var(--border);
+    color: var(--dim); font-size: 12px; cursor: pointer; transition: all 0.2s;
+  }
+  .chart-mobile-toggle:hover { color: var(--accent); border-color: var(--accent); }
+  .chart-mobile-section {
+    display: none; padding: 16px; border: 1px solid var(--border);
+    border-radius: 12px; background: var(--card); margin: 0 8px;
+  }
+  .chart-mobile-section.visible { display: block; }
+  .chart-mobile-section canvas {
+    width: 100%; background: var(--card); border-radius: 8px;
+  }
+
+  /* ── Responsive ───────────────────────────────── */
+  @media (max-width: 900px) {
+    .chart-pane { display: none !important; }
+    .chart-mobile-toggle { display: block; }
+    .debate-pane { padding: 12px 8px; }
+    .turn-wrap { max-width: 95%; }
+    .turn-wrap.pos-left, .turn-wrap.pos-right { max-width: 95%; }
+    .turn-wrap.pos-center { max-width: 98%; }
+    /* Top bar: stack vertically on tablet */
+    .top-bar { flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+    .top-bar-left { flex: 1 1 100%; justify-content: space-between; }
+    .top-bar-right { flex: 1 1 100%; justify-content: flex-end; }
+    #agentStatusBar { display: none !important; }
+    #mobileSpeaker { display: flex !important; }
+    #interveneBar { padding: 0 8px; }
+    .timeline { width: 28px; }
+    .timeline-dot { width: 12px; height: 12px; }
+    .timeline-dot .dot-num { font-size: 6px; }
+    .turn-avatar { width: 26px; height: 26px; font-size: 9px; }
+    /* Header card: stack ring below */
+    .header-body { flex-direction: column; gap: 12px; }
+    .progress-ring-wrap { align-self: center; }
+    #topic { font-size: 14px; }
+    /* Markdown overflow fix */
+    .turn-content.md pre { max-width: calc(100vw - 100px); overflow-x: auto; font-size: 11px; }
+    .turn-content.md code { word-break: break-all; }
+  }
+  @media (max-width: 480px) {
+    html, body { overflow-x: hidden; }
+    .top-bar { padding: 6px 8px; }
+    .back-link { font-size: 11px; padding: 4px 8px; }
+    .ctrl-btn { padding: 4px 10px; font-size: 11px; }
+    .debate-pane { padding: 6px 2px; }
+    .turns-col { padding-left: 6px; gap: 10px; }
+    /* Hide timeline on small phones — replaced by progress chip */
+    .timeline { display: none; }
+    .mobile-progress { display: flex !important; }
+    .turn-wrap { max-width: 100%; }
+    .turn-wrap.pos-left, .turn-wrap.pos-right { max-width: 100%; flex-direction: row; }
+    .turn-wrap.pos-center { max-width: 100%; }
+    .turn { padding: 10px 12px; border-radius: 12px; }
+    .turn-wrap.pos-left .turn { border-radius: 4px 12px 12px 12px; }
+    .turn-wrap.pos-right .turn { border-radius: 12px 4px 12px 12px; }
+    .turn-content { font-size: 13px; line-height: 1.6; }
+    .turn-content.md pre { max-width: calc(100vw - 40px); padding: 8px 10px; font-size: 11px; }
+    .turn-header { gap: 5px; font-size: 11px; flex-wrap: wrap; }
+    .turn-avatar { width: 22px; height: 22px; font-size: 8px; }
+    .agent-chip { font-size: 10px; padding: 3px 8px; }
+    .directives { gap: 4px; }
+    .dir-badge { font-size: 9px; padding: 2px 6px; }
+    .decision-modal { padding: 16px 12px; width: 95%; }
+    .progress-ring-wrap { width: 56px; height: 56px; }
+    .progress-ring-wrap svg { width: 56px; height: 56px; }
+    .yield-notice { font-size: 11px; padding: 8px 12px; max-width: 100%; }
+    #summary { max-width: 100%; padding: 12px; }
+    #summary table { font-size: 11px; }
+    #header { padding: 14px 12px; border-radius: 12px; }
+    #header h1 { font-size: 11px; letter-spacing: 2px; }
+    #agents-bar { gap: 4px; }
+    .agent-chip .model { display: none; }
+    .agent-chip .avatar { width: 16px; height: 16px; }
+    .agent-chip .name { font-size: 10px; }
+    /* Intervene bar: fixed bottom, full width */
+    #interveneBar { padding: 0 4px; }
+    #interveneBar input { font-size: 13px; padding: 10px 12px; }
+    #interveneBar button[type=submit] { padding: 10px 14px; font-size: 12px; }
+  }
+  @supports (padding-top: env(safe-area-inset-top)) {
+    .top-bar { padding-top: calc(8px + env(safe-area-inset-top)); }
+    #interveneBar { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#turnsCol" data-t="app.skip">Skip to debate</a>
+<div class="app-shell">
+  <!-- Top bar -->
+  <nav class="top-bar">
+    <div class="top-bar-left">
+      <a class="back-link" href="/" data-t="nav.back_dashboard">&larr; Dashboard</a>
+      <div id="agentStatusBar"></div>
+      <div id="mobileSpeaker" style="display:none;font-size:11px;color:var(--dim);align-items:center;gap:4px;"></div>
+    </div>
+    <div class="top-bar-right">
+      <button id="viewDecisionBtn" onclick="showDecisionModal()" data-t="btn.view_decision">View Decision</button>
+      <button id="debatePauseBtn" class="ctrl-btn" onclick="togglePause()" style="border-color:var(--warning);color:var(--warning);display:none;" data-t="btn.pause">Pause</button>
+      <button id="debateStopBtn" class="ctrl-btn" onclick="fetch('/api/stop',{method:'POST'}).then(()=>{this.textContent=t('btn.stopped');this.disabled=true;})" style="border-color:var(--red);color:var(--red);display:none;" data-t="btn.stop">Stop</button>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main class="main-layout" role="log" aria-live="polite">
+    <!-- Debate pane (left) -->
+    <div class="debate-pane" id="debatePane">
+      <!-- Timeline rail -->
+      <div class="timeline" id="timelineRail"><div class="timeline-line"></div></div>
+      <!-- Turns column -->
+      <div class="turns-col" id="turnsCol">
+        <!-- Mobile progress chip (visible <480px) -->
+        <div class="mobile-progress" id="mobileProgress" aria-label="Debate progress">
+          <span class="mp-label" id="mpLabel">Turn 0/?</span>
+          <div class="mp-bar"><div class="mp-fill" id="mpFill" style="width:0%"></div></div>
+          <span id="mpPhase" style="color:var(--dim);font-size:10px;"></span>
+        </div>
+        <div id="header">
+          <h1 data-t="heading.agora_debate">Agora Debate</h1>
+          <div class="header-body">
+            <div class="header-info">
+              <div id="topic"></div>
+              <div id="agents-bar"></div>
+              <div id="meta"></div>
+            </div>
+            <div class="progress-ring-wrap" id="turnProgress" style="display:none;">
+              <svg viewBox="0 0 72 72">
+                <defs>
+                  <linearGradient id="progressGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color=COLORS.primary/>
+                    <stop offset="100%" stop-color=COLORS.cyan/>
+                  </linearGradient>
+                </defs>
+                <circle class="progress-ring-bg" cx="36" cy="36" r="30"/>
+                <circle class="progress-ring-fill" id="progressCircle" cx="36" cy="36" r="30"
+                  stroke-dasharray="188.5" stroke-dashoffset="188.5"/>
+              </svg>
+              <div class="progress-ring-text">
+                <span class="turn-label-sm" data-t="label.turn">Turn</span>
+                <span><span id="turnCurrent">0</span>/<span id="turnMax">?</span></span>
+                <span id="turnPhase" style="font-size:7px;color:var(--dim);max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="status"><span class="spinner"></span><span data-t="status.starting">Starting debate — running health checks...</span></div>
+        <div id="turns"></div>
+        <!-- Mobile chart toggle -->
+        <button class="chart-mobile-toggle" id="mobileChartToggle" onclick="toggleMobileChart()" data-t="btn.show_map">Show Interaction Map</button>
+        <div class="chart-mobile-section" id="mobileChartSection">
+          <canvas id="chartCanvasMobile" style="width:100%;border-radius:8px;"></canvas>
+        </div>
+        <div id="summary"><h2 data-t="section.summary">Summary</h2><table id="summary-table"></table></div>
+      </div>
+    </div>
+    <!-- Chart pane (right sidebar, desktop) -->
+    <div class="chart-pane" id="chartPane">
+      <div class="chart-pane-header" data-t="section.interaction_map">Interaction Map</div>
+      <div class="chart-pane-body">
+        <canvas id="chartCanvas"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <!-- Intervene bar at bottom -->
+  <div id="interveneBar">
+    <form onsubmit="sendIntervention(event)">
+      <input id="interveneInput" type="text" placeholder="Send a correction or question to the debate..." data-t-placeholder="placeholder.intervene">
+      <button type="submit" data-t="btn.send">Send</button>
+    </form>
+  </div>
+</div>
+
+<!-- Decision modal overlay -->
+<div class="decision-modal-overlay" id="decisionOverlay">
+  <div class="decision-modal" role="dialog" aria-modal="true" aria-label="Decision Summary">
+    <h2 data-t="section.decision_summary">Decision Summary</h2>
+    <div id="decision-content"></div>
+    <button class="decision-close-btn" onclick="hideDecisionModal()" data-t="btn.close">Close</button>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let currentTurnEl = null;
+let currentContentEl = null;
+let currentTurnWrap = null;
+let userScrolledUp = false;
+let debateEdges = [];
+let agentSet = [];
+let focusedTurn = null;
+let turnCounter = 0;
+let decisionReady = false;
+
+const debatePane = document.getElementById('debatePane');
+debatePane.addEventListener('scroll', () => {
+  const atBottom = (debatePane.scrollHeight - debatePane.scrollTop - debatePane.clientHeight) < 80;
+  userScrolledUp = !atBottom;
+});
+
+const AGENT_COLORS = [COLORS.primary,COLORS.emerald,COLORS.cyan,COLORS.purple,COLORS.orange,COLORS.warning,COLORS.danger,COLORS.success];
+
+const INTENT_COLORS = {
+  propose: COLORS.primary, critique: COLORS.danger, defend: COLORS.orange,
+  synthesize: COLORS.purple, question: COLORS.cyan, concede: COLORS.emerald, yield: COLORS.dim
+};
+
+function getAgentColor(name) {
+  const idx = agentSet.indexOf(name);
+  return AGENT_COLORS[(idx >= 0 ? idx : 0) % AGENT_COLORS.length];
+}
+
+function getInitials(name) {
+  const parts = name.replace(/[^a-zA-Z0-9 _-]/g, '').split(/[\s_-]+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.substring(0, 2).toUpperCase();
+}
+
+function avatarHTML(name, size) {
+  const col = getAgentColor(name);
+  const ini = getInitials(name);
+  const s = size || 32;
+  return `<div style="width:${s}px;height:${s}px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:${Math.round(s*0.34)}px;font-weight:700;color:var(--text);flex-shrink:0;">${ini}</div>`;
+}
+
+function drawChart() {
+  // Draw on desktop canvas
+  const canvas = $('#chartCanvas');
+  drawChartOn(canvas, 'chartPane');
+  // Draw on mobile canvas if visible
+  const mc = document.getElementById('chartCanvasMobile');
+  if (mc && document.getElementById('mobileChartSection').classList.contains('visible')) {
+    drawChartOn(mc, 'mobileChartSection');
+  }
+}
+
+function drawChartOn(canvas, containerId) {
+  if (!canvas || agentSet.length < 2 || debateEdges.length < 1) return;
+  const container = document.getElementById(containerId);
+  if (container && containerId === 'chartPane') {
+    container.classList.add('visible');
+  }
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = Math.max(300, agentSet.length * 50 + 60);
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr); ctx.clearRect(0, 0, w, h);
+  const padL = 130, padR = 30, padT = 30, padB = 30;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  const maxTurn = Math.max(...debateEdges.map(e => e.turn), 1);
+  const xStep = plotW / Math.max(maxTurn, 1);
+  agentSet.forEach((name, i) => {
+    const y = padT + (plotH / (agentSet.length - 1 || 1)) * i;
+    const col = AGENT_COLORS[i % AGENT_COLORS.length];
+    ctx.strokeStyle = col + '22'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+    ctx.fillStyle = col; ctx.font = '11px monospace';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(name, padL - 10, y);
+    ctx.beginPath(); ctx.arc(padL - 4, y, 3, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.fillStyle = '#555568'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+  for (let t = 1; t <= maxTurn; t++) ctx.fillText(t, padL + (t - 0.5) * xStep, padT - 12);
+  debateEdges.forEach(edge => {
+    const fi = agentSet.indexOf(edge.from), ti = agentSet.indexOf(edge.to);
+    if (fi < 0 || ti < 0) return;
+    const x = padL + (edge.turn - 0.5) * xStep;
+    const y1 = padT + (plotH / (agentSet.length - 1 || 1)) * fi;
+    const y2 = padT + (plotH / (agentSet.length - 1 || 1)) * ti;
+    const col = AGENT_COLORS[fi % AGENT_COLORS.length];
+    const isBroadcast = edge.broadcast;
+    ctx.strokeStyle = col + (isBroadcast ? '44' : 'aa');
+    ctx.lineWidth = isBroadcast ? 1 : 2;
+    ctx.beginPath(); ctx.moveTo(x, y1);
+    const cpx = x + (fi === ti ? 20 : 0), cpy = (y1 + y2) / 2;
+    ctx.quadraticCurveTo(cpx + 15, cpy, x, y2); ctx.stroke();
+    const angle = Math.atan2(y2 - cpy, x - cpx - 15);
+    ctx.fillStyle = col + 'aa'; ctx.beginPath(); ctx.moveTo(x, y2);
+    ctx.lineTo(x - 6 * Math.cos(angle - 0.4), y2 - 6 * Math.sin(angle - 0.4));
+    ctx.lineTo(x - 6 * Math.cos(angle + 0.4), y2 - 6 * Math.sin(angle + 0.4));
+    ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y1, 4, 0, Math.PI * 2); ctx.fill();
+  });
+}
+
+window.addEventListener('resize', () => { if (debateEdges.length) drawChart(); });
+
+let debateMaxTurns = 24;
+const AGENT_PILL_COLORS = [COLORS.primary,COLORS.emerald,COLORS.cyan,COLORS.purple,COLORS.orange,COLORS.warning,COLORS.danger,COLORS.success];
+
+function renderAgentStatus() {
+  const asb = document.getElementById('agentStatusBar');
+  if (!asb || !window._agentStatus) return;
+  asb.innerHTML = Object.entries(window._agentStatus).map(([name, st], i) => {
+    const col = AGENT_PILL_COLORS[i % AGENT_PILL_COLORS.length];
+    const bg = st.speaking ? col + '33' : st.yielded ? 'var(--border)' : COLORS.border;
+    const border = st.speaking ? col : st.yielded ? 'rgba(148,163,184,0.2)' : COLORS.border;
+    const textCol = st.yielded ? 'var(--dim)' : COLORS.text;
+    const badge = st.yielded ? ' (yielded)' : st.speaking ? ' ...' : '';
+    const speakingClass = st.speaking ? 'speaking' : '';
+    const ini = getInitials(name);
+    return `<div class="agent-pill ${speakingClass}" style="border-color:${border};background:${bg};color:${textCol};${st.speaking?'--pulse-col:'+col+';':''}">
+      ${st.speaking ? '<style>.agent-pill.speaking[style*=\"'+col+'\"]::after{border-color:'+col+';}</style>' : ''}
+      <div class="pill-avatar" style="background:${col};${st.yielded?'opacity:0.3':''}">${ini}</div>
+      ${name}<span style="color:var(--dim);margin-left:2px;">${st.turns}${badge}</span>
+    </div>`;
+  }).join('');
+  // Mobile compact speaker indicator
+  const ms = document.getElementById('mobileSpeaker');
+  if (ms) {
+    const speaking = Object.entries(window._agentStatus).find(([,s]) => s.speaking);
+    if (speaking) {
+      const [name] = speaking;
+      const col = AGENT_PILL_COLORS[agentSet.indexOf(name) % AGENT_PILL_COLORS.length];
+      ms.innerHTML = `<span class="spinner" style="width:10px;height:10px;border-width:1.5px;margin:0;"></span><span style="color:${col};font-weight:600;">${name}</span>`;
+      ms.style.display = 'flex';
+    } else {
+      const total = Object.values(window._agentStatus).reduce((s,a) => s + a.turns, 0);
+      const yielded = Object.values(window._agentStatus).filter(a => a.yielded).length;
+      ms.innerHTML = `<span style="color:var(--dim);">${total} turns${yielded ? ' \u00b7 ' + yielded + ' yielded' : ''}</span>`;
+      ms.style.display = 'flex';
+    }
+  }
+}
+
+function updateTurnProgress(turn) {
+  const cur = document.getElementById('turnCurrent');
+  const max = document.getElementById('turnMax');
+  const circle = document.getElementById('progressCircle');
+  if (cur) cur.textContent = turn;
+  if (max) max.textContent = debateMaxTurns;
+  if (circle) {
+    const circumference = 2 * Math.PI * 30;
+    const pct = Math.min(1, turn / debateMaxTurns);
+    circle.style.strokeDashoffset = circumference * (1 - pct);
+  }
+  // Mobile progress chip
+  const mpLabel = document.getElementById('mpLabel');
+  const mpFill = document.getElementById('mpFill');
+  if (mpLabel) mpLabel.textContent = `Turn ${turn}/${debateMaxTurns}`;
+  if (mpFill) mpFill.style.width = Math.min(100, (turn / debateMaxTurns) * 100) + '%';
+}
+
+function toggleTurn(el) {
+  const content = el.nextElementSibling;
+  const directives = content.nextElementSibling;
+  if (content.style.display === 'none') {
+    content.style.display = '';
+    if (directives && directives.classList.contains('directives')) directives.style.display = '';
+    el.querySelector('.collapse-icon').textContent = '\u2212';
+  } else {
+    content.style.display = 'none';
+    if (directives && directives.classList.contains('directives')) directives.style.display = 'none';
+    el.querySelector('.collapse-icon').textContent = '+';
+  }
+}
+
+const MAX_VISIBLE_TURNS = 60;
+function autoScroll(el) {
+  if (!userScrolledUp) el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  // DOM performance: collapse old turns when too many
+  const turns = document.getElementById('turns');
+  if (turns) {
+    const wraps = turns.querySelectorAll('.turn-wrap');
+    if (wraps.length > MAX_VISIBLE_TURNS) {
+      for (let i = 0; i < wraps.length - MAX_VISIBLE_TURNS; i++) {
+        const content = wraps[i].querySelector('.turn-content');
+        const dirs = wraps[i].querySelector('.directives');
+        if (content && content.style.display !== 'none') {
+          content.style.display = 'none';
+          if (dirs) dirs.style.display = 'none';
+          const icon = wraps[i].querySelector('.collapse-icon');
+          if (icon) icon.textContent = '+';
+        }
+      }
+    }
+  }
+}
+
+// md() is provided by /static/base.js
+
+// ── Focus mode ──────────────────────────────────
+function handleFocus(turnWrapEl) {
+  if (focusedTurn === turnWrapEl) {
+    // Unfocus
+    focusedTurn = null;
+    document.querySelectorAll('.turn-wrap').forEach(tw => {
+      tw.classList.remove('dimmed', 'focused');
+    });
+    return;
+  }
+  focusedTurn = turnWrapEl;
+  document.querySelectorAll('.turn-wrap').forEach(tw => {
+    if (tw === turnWrapEl) {
+      tw.classList.add('focused');
+      tw.classList.remove('dimmed');
+    } else {
+      tw.classList.add('dimmed');
+      tw.classList.remove('focused');
+    }
+  });
+}
+
+// ── Timeline dot ────────────────────────────────
+function addTimelineDot(turn, agentName) {
+  const rail = document.getElementById('timelineRail');
+  const dot = document.createElement('div');
+  dot.className = 'timeline-dot';
+  dot.style.background = getAgentColor(agentName);
+  dot.innerHTML = `<span class="dot-num">${turn}</span>`;
+  dot.title = `Turn ${turn} - ${agentName}`;
+  dot.onclick = () => {
+    const el = document.getElementById('turn-' + turn);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  rail.appendChild(dot);
+}
+
+// ── Decision modal ──────────────────────────────
+let _releaseTrap = null;
+function showDecisionModal() {
+  const overlay = document.getElementById('decisionOverlay');
+  overlay.classList.add('visible');
+  const modal = overlay.querySelector('.decision-modal');
+  if (modal && typeof trapFocus === 'function') {
+    _releaseTrap = trapFocus(modal);
+    modal.addEventListener('close', hideDecisionModal, {once: true});
+  }
+}
+function hideDecisionModal() {
+  document.getElementById('decisionOverlay').classList.remove('visible');
+  if (_releaseTrap) { _releaseTrap(); _releaseTrap = null; }
+}
+
+// ── Mobile chart toggle ─────────────────────────
+function toggleMobileChart() {
+  const sec = document.getElementById('mobileChartSection');
+  const btn = document.getElementById('mobileChartToggle');
+  if (sec.classList.contains('visible')) {
+    sec.classList.remove('visible');
+    btn.textContent = t('btn.show_map');
+  } else {
+    sec.classList.add('visible');
+    btn.textContent = t('btn.hide_map');
+    // Redraw on mobile canvas
+    const mc = document.getElementById('chartCanvasMobile');
+    if (mc && debateEdges.length) drawChartOn(mc, 'mobileChartSection');
+  }
+}
+
+// ── Bubble positioning ──────────────────────────
+function getTurnPosition(agentName, addressed) {
+  if (addressed === 'all') return 'pos-center';
+  const idx = agentSet.indexOf(agentName);
+  // Alternate left/right by agent index
+  return (idx % 2 === 0) ? 'pos-left' : 'pos-right';
+}
+
+// ── Initial status check ────────────────────────
+// If no debate is running and no replay data, show a helpful message
+(async () => {
+  try {
+    const res = await fetch('/api/status');
+    const st = await res.json();
+    if (!st.running) {
+      // Wait a moment — debate may be starting (e.g. from continue)
+      await new Promise(r => setTimeout(r, 2000));
+      const res2 = await fetch('/api/status');
+      const st2 = await res2.json();
+      if (!st2.running) {
+        const el = $('#status');
+        el.innerHTML = t('status.no_debate') + ' <a href="/" style="color:var(--accent);text-decoration:underline;">' + t('status.go_dashboard') + '</a> to start one.';
+      }
+    }
+  } catch(e) {}
+})();
+
+// ── SSE ─────────────────────────────────────────
+const es = new EventSource('/events');
+es.onerror = () => {};
+
+es.addEventListener('header', e => {
+  const d = JSON.parse(e.data);
+  $('#header').style.display = 'block';
+  $('#topic').textContent = d.topic;
+  $('#agents-bar').innerHTML = d.agents.map((a, i) => {
+    const col = AGENT_COLORS[i % AGENT_COLORS.length];
+    const ini = getInitials(a.name);
+    return `<span class="agent-chip"><div class="avatar" style="background:${col}">${ini}</div><span class="name" style="color:${col}">${a.name}</span><span class="model">${a.model}</span></span>`;
+  }).join('');
+  $('#meta').textContent = `${d.agents.length} agents \u00b7 ~${d.est_gb}GB \u00b7 ${d.mode}`;
+  $('#status').style.display = 'none';
+  agentSet = d.agents.map(a => a.name);
+  debateMaxTurns = d.max_turns || 24;
+  const sb = document.getElementById('debateStopBtn');
+  if (sb) sb.style.display = '';
+  const pb = document.getElementById('debatePauseBtn');
+  if (pb) pb.style.display = '';
+  const ib = document.getElementById('interveneBar');
+  if (ib) ib.classList.add('visible');
+  // Agent status bar
+  const asb = document.getElementById('agentStatusBar');
+  asb.style.display = 'flex';
+  asb.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
+  window._agentStatus = {};
+  d.agents.forEach((a, i) => {
+    window._agentStatus[a.name] = {turns: 0, yielded: false, speaking: false};
+  });
+  renderAgentStatus();
+  document.getElementById('turnProgress').style.display = '';
+});
+
+es.addEventListener('status', e => {
+  const d = JSON.parse(e.data);
+  $('#status').innerHTML = `<span class="spinner"></span>${d.text}`;
+  $('#status').style.display = 'block';
+});
+
+es.addEventListener('turn_start', e => {
+  const d = JSON.parse(e.data);
+  $('#status').style.display = 'none';
+  turnCounter++;
+  // Update agent status
+  if (window._agentStatus) {
+    Object.keys(window._agentStatus).forEach(n => window._agentStatus[n].speaking = false);
+    if (window._agentStatus[d.name]) window._agentStatus[d.name].speaking = true;
+    renderAgentStatus();
+  }
+  updateTurnProgress(d.turn);
+
+  // Add timeline dot
+  addTimelineDot(d.turn, d.name);
+
+  // Create turn wrapper with chat positioning
+  const wrap = document.createElement('div');
+  // We don't know addressed yet at turn_start, default to left/right alternation
+  const pos = (agentSet.indexOf(d.name) % 2 === 0) ? 'pos-left' : 'pos-right';
+  wrap.className = `turn-wrap ${pos}`;
+  wrap.dataset.turn = d.turn;
+  wrap.dataset.agent = d.name;
+  wrap.onclick = (ev) => {
+    // Don't trigger focus when clicking collapse icon
+    if (ev.target.classList.contains('collapse-icon')) return;
+    handleFocus(wrap);
+  };
+
+  const label = d.closing ? '<span class="turn-label">' + t('debate.closing_label') + '</span>' : '';
+  const col = getAgentColor(d.name);
+  wrap.innerHTML = `
+    ${avatarHTML(d.name, 32)}
+    <div class="turn ${d.closing ? 'active closing' : 'active'}" id="turn-${d.turn}">
+      <div class="turn-header" onclick="toggleTurn(this)" style="cursor:pointer;">
+        <span class="turn-num">#${d.turn}</span>
+        <span class="turn-name" style="color:${col}">${d.name}</span>
+        ${label}
+        <span class="collapse-icon">\u2212</span>
+      </div>
+      <div class="turn-content"></div>
+    </div>`;
+  $('#turns').appendChild(wrap);
+  currentTurnWrap = wrap;
+  currentTurnEl = wrap.querySelector('.turn');
+  currentContentEl = wrap.querySelector('.turn-content');
+  autoScroll(wrap);
+});
+
+es.addEventListener('token', e => {
+  if (!currentContentEl) return;
+  const d = JSON.parse(e.data);
+  currentContentEl.appendChild(document.createTextNode(d.text));
+  autoScroll(currentTurnWrap || currentTurnEl);
+});
+
+es.addEventListener('turn_end', e => {
+  const d = JSON.parse(e.data);
+  if (!currentTurnEl) return;
+  currentTurnEl.classList.remove('active');
+  currentContentEl.classList.add('md');
+  currentContentEl.innerHTML = md(d.content);
+
+  // Apply intent border color
+  const intentKey = (d.intent || '').toLowerCase();
+  if (INTENT_COLORS[intentKey]) {
+    currentTurnEl.classList.add('intent-' + intentKey);
+  }
+
+  // Update positioning based on addressed
+  if (currentTurnWrap) {
+    const newPos = getTurnPosition(d.name, d.addressed);
+    currentTurnWrap.className = currentTurnWrap.className.replace(/pos-\w+/, newPos);
+    // Add addressed-specific styling
+    if (d.addressed && d.addressed !== 'all') {
+      currentTurnEl.classList.add('addr-specific');
+    }
+  }
+
+  // Add addressed indicator to header
+  if (d.addressed) {
+    const addrSpan = document.createElement('span');
+    addrSpan.className = 'turn-addressed';
+    addrSpan.textContent = d.addressed === 'all' ? '\u2192 all' : '\u2192 ' + d.addressed;
+    const header = currentTurnEl.querySelector('.turn-header');
+    const collapseIcon = header.querySelector('.collapse-icon');
+    header.insertBefore(addrSpan, collapseIcon);
+  }
+
+  let badges = `<span class="dir-badge intent">${t('debate.intent', {v: d.intent})}</span>`;
+  badges += `<span class="dir-badge addressed">${t('debate.to', {v: d.addressed})}</span>`;
+  badges += `<span class="dir-badge next">${t('debate.next', {v: d.next_action})}</span>`;
+  if (d.closing) badges += `<span class="dir-badge closing">${t('badge.closing')}</span>`;
+  if (d.yielded) badges += `<span class="dir-badge yielded">${t('badge.yielded')}</span>`;
+  if (d.invited) badges += `<span class="dir-badge invited">${t('debate.invited', {v: d.invited})}</span>`;
+  const dirDiv = document.createElement('div');
+  dirDiv.className = 'directives'; dirDiv.innerHTML = badges;
+  currentTurnEl.appendChild(dirDiv);
+  if (d.addressed && d.addressed !== 'all') {
+    debateEdges.push({from: d.name, to: d.addressed, turn: d.turn, intent: d.intent});
+  } else if (d.addressed === 'all') {
+    agentSet.forEach(a => {
+      if (a !== d.name) debateEdges.push({from: d.name, to: a, turn: d.turn, intent: d.intent, broadcast: true});
+    });
+  }
+  if (d.invited)
+    debateEdges.push({from: d.name, to: d.invited, turn: d.turn, intent: 'invite'});
+  drawChart();
+  // Update agent status
+  if (window._agentStatus && window._agentStatus[d.name]) {
+    window._agentStatus[d.name].turns++;
+    window._agentStatus[d.name].speaking = false;
+    if (d.yielded) window._agentStatus[d.name].yielded = true;
+    renderAgentStatus();
+  }
+  currentTurnEl = null; currentContentEl = null; currentTurnWrap = null;
+});
+
+es.addEventListener('yield_notice', e => {
+  const d = JSON.parse(e.data);
+  const div = document.createElement('div');
+  div.className = 'system-notice yield';
+  div.innerHTML = t('debate.yield_notice', {name: '<span class="notice-label">' + d.name + '</span>', remaining: d.remaining.join(', ')});
+  $('#turns').appendChild(div);
+  autoScroll(div);
+});
+
+es.addEventListener('summary', e => {
+  const d = JSON.parse(e.data);
+  const tbl = $('#summary-table');
+  tbl.innerHTML = `<tr><th>${t('table.agent')}</th><th>${t('table.turns')}</th><th>${t('table.intents')}</th><th>${t('table.status')}</th></tr>`;
+  d.agents.forEach(a => {
+    const intents = Object.entries(a.intents).map(([k,v]) => `${k}x${v}`).join(', ');
+    const st = a.yielded ? '<span style="color:var(--yellow)">' + t('table.yielded') + '</span>' : t('table.active');
+    tbl.innerHTML += `<tr><td class="agent-name">${a.name}</td><td>${a.turns}</td><td>${intents}</td><td>${st}</td></tr>`;
+  });
+  $('#summary').style.display = 'block';
+  autoScroll($('#summary'));
+});
+
+es.addEventListener('decision_start', e => {
+  $('#status').innerHTML = '<span class="spinner"></span>' + t('status.generating_decision');
+  $('#status').style.display = 'block';
+});
+
+es.addEventListener('decision_token', e => {
+  const overlay = document.getElementById('decisionOverlay');
+  if (!overlay.classList.contains('visible')) {
+    overlay.classList.add('visible');
+    $('#status').style.display = 'none';
+  }
+  const d = JSON.parse(e.data);
+  $('#decision-content').appendChild(document.createTextNode(d.text));
+});
+
+es.addEventListener('decision_end', e => {
+  const d = JSON.parse(e.data);
+  $('#status').style.display = 'none';
+  decisionReady = true;
+  $('#decision-content').innerHTML = md(d.content);
+  // Show modal
+  document.getElementById('decisionOverlay').classList.add('visible');
+  // Show "View Decision" button for later access
+  document.getElementById('viewDecisionBtn').style.display = '';
+});
+
+es.addEventListener('done', e => {
+  const d = JSON.parse(e.data);
+  $('#status').innerHTML = d.reason;
+  $('#status').style.display = 'block';
+  const sb = document.getElementById('debateStopBtn');
+  if (sb) sb.style.display = 'none';
+  const ib = document.getElementById('interveneBar');
+  if (ib) { ib.classList.remove('visible', 'human-needed'); }
+});
+
+es.addEventListener('human_needed', e => {
+  const d = JSON.parse(e.data);
+  const bar = document.getElementById('interveneBar');
+  if (bar) {
+    bar.classList.add('visible', 'human-needed');
+  }
+  const notice = document.createElement('div');
+  notice.className = 'system-notice human-needed';
+  notice.innerHTML = `<span class="notice-label">${t('debate.human_needed')}</span> ${t('debate.human_notice', {speaker: d.speaker})}`;
+  $('#turns').appendChild(notice);
+  autoScroll(notice);
+  const input = document.getElementById('interveneInput');
+  if (input) { input.focus(); input.placeholder = t('placeholder.intervene_human'); }
+});
+
+es.addEventListener('saved', e => {
+  const d = JSON.parse(e.data);
+  if (d.path) {
+    const notice = document.createElement('div');
+    notice.className = 'system-notice saved';
+    notice.innerHTML = '<span class="notice-label">' + t('debate.saved_label') + '</span> ' + t('debate.saved_notice');
+    $('#turns').appendChild(notice);
+  }
+});
+
+setInterval(async () => {
+  try {
+    const res = await fetch('/api/status');
+    const st = await res.json();
+    if (!st.running && !document.querySelector('#status')?.textContent) {
+      $('#status').innerHTML = t('status.debate_ended');
+      $('#status').style.display = 'block';
+      const sb = document.getElementById('debateStopBtn');
+      if (sb) sb.style.display = 'none';
+      const ib = document.getElementById('interveneBar');
+      if (ib) ib.classList.remove('visible', 'human-needed');
+    }
+  } catch(e) {}
+}, 10000);
+
+es.addEventListener('moderator_msg', e => {
+  const d = JSON.parse(e.data);
+  // L1: Phase transitions get full-width divider
+  if (d.content && d.content.startsWith('Phase ')) {
+    const div = document.createElement('div');
+    div.className = 'phase-divider';
+    div.innerHTML = `<span class="phase-pill">${d.content}</span>`;
+    $('#turns').appendChild(div);
+    autoScroll(div);
+    const tp = document.getElementById('turnPhase');
+    if (tp) tp.textContent = d.content.split(':')[0] || '';
+    return;
+  }
+  // L2: Regular moderator messages
+  const div = document.createElement('div');
+  div.className = 'system-notice moderator';
+  div.innerHTML = `<span class="notice-label">${t('debate.moderator')}</span> ${d.content}`;
+  $('#turns').appendChild(div);
+  autoScroll(div);
+});
+
+let isPaused = false;
+async function togglePause() {
+  const btn = document.getElementById('debatePauseBtn');
+  if (!isPaused) {
+    await fetch('/api/pause', {method: 'POST'});
+    isPaused = true;
+    btn.textContent = t('btn.resume');
+    btn.style.borderColor = COLORS.emerald;
+    btn.style.color = COLORS.emerald;
+    const input = document.getElementById('interveneInput');
+    if (input) { input.focus(); input.placeholder = t('placeholder.intervene_paused'); }
+  } else {
+    await fetch('/api/resume', {method: 'POST'});
+    isPaused = false;
+    btn.textContent = t('btn.pause');
+    btn.style.borderColor = COLORS.warning;
+    btn.style.color = COLORS.warning;
+  }
+}
+
+async function sendIntervention(e) {
+  e.preventDefault();
+  const input = document.getElementById('interveneInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+  const res = await fetch('/api/intervene', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({message: msg})
+  });
+  const result = await res.json();
+  if (result.ok) {
+    input.value = '';
+    input.placeholder = t('placeholder.intervene');
+    const bar = document.getElementById('interveneBar');
+    if (bar) bar.classList.remove('human-needed');
+  }
+}
+
+es.onerror = () => { es.close(); };
+</script>
+</body>
+</html>

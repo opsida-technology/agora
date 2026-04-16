@@ -12,7 +12,7 @@ import sys
 import yaml
 
 
-def check_cli(name: str, test_cmd: list[str], timeout: int = 30) -> dict:
+def check_cli(name: str, test_cmd: list[str], timeout: int = 15) -> dict:
     """Check if a CLI tool is installed, responsive, and authenticated."""
     result = {"name": name, "installed": False, "responds": False,
               "auth": False, "detail": ""}

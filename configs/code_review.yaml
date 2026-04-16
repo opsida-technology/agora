@@ -1,36 +1,60 @@
-# code_review.yaml
-# Three-model code review council.
-# Claude reviews architecture, Codex reviews implementation, Gemini reviews security.
+# code_review.yaml — Three-model code review council
+# Showcases: context (paste code/docs), turn_budget, anti_consensus
 
-topic: "Review the proposed migration from REST to GraphQL for our public API"
-max_turns: 12
+topic: |
+  Review the proposed migration from REST to GraphQL for our public API.
+  Evaluate the trade-offs and recommend a path forward.
+
+context: |
+  Current state:
+  - REST API serving 50 endpoints, ~2M requests/day
+  - 12 mobile + web clients consuming the API
+  - No API versioning strategy (breaking changes cause client issues)
+  - Average response includes 40% unused fields (over-fetching)
+  - 3 backend engineers maintain the API
+
+  Proposed changes:
+  - Replace REST with GraphQL (Apollo Server)
+  - Keep REST endpoints for backward compat during 6-month migration
+  - Add schema-first design with code generation
+  - Implement DataLoader for N+1 prevention
+
+max_turns: 14
+language: English
+anti_consensus: true
 
 agents:
   - name: architect
     backend: cli
-    command: ["claude", "-p"]
-    timeout: 120
+    command: ["claude", "-p", "--allowedTools", "WebSearch,WebFetch"]
+    timeout: 180
+    turn_budget: 6
     system: |
       You are a software architect. Review the proposal for architectural
       soundness: API design patterns, backward compatibility, versioning
-      strategy, client impact. Name specific risks. 4-6 sentences per turn.
+      strategy, client impact. Search for real migration case studies.
+      Name specific risks with severity ratings. 5-7 sentences per turn.
 
   - name: implementer
     backend: cli
     command: ["codex", "exec"]
     timeout: 120
+    turn_budget: 5
     system: |
       You are a senior backend engineer. Review the proposal for
       implementation feasibility: migration complexity, N+1 query risks,
-      caching invalidation, tooling maturity. Be concrete about what
-      breaks during migration. 4-6 sentences per turn.
+      caching invalidation, tooling maturity, monitoring gaps.
+      Be concrete about what breaks during migration and estimate effort.
+      5-7 sentences per turn.
 
   - name: security-reviewer
     backend: cli
     command: ["gemini", "-p"]
-    timeout: 120
+    timeout: 180
+    turn_budget: 5
     system: |
       You are a security engineer. Review the proposal for security
       implications: query depth attacks, authorization complexity,
       introspection exposure, rate limiting differences between REST
-      and GraphQL. Cite OWASP where relevant. 4-6 sentences per turn.
+      and GraphQL. Cite OWASP where relevant. Search for recent
+      GraphQL vulnerability reports. 5-7 sentences per turn.

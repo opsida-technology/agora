@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Debate Detail</title>
+<link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+<link rel="stylesheet" href="/static/base.css">
+<script src="/static/base.js"></script>
+<script src="/static/i18n.js"></script>
+<style>
+  :root {
+    --card: var(--surface); --blue: var(--primary);
+    --secondary: var(--text-secondary);
+    --yellow: var(--warning); --red: var(--danger);
+  }
+  body { font-family: Inter, -apple-system, sans-serif; background: var(--bg); color: var(--text);
+    max-width: 1400px; margin: 0 auto; padding: 24px 16px; line-height: 1.7;
+    font-feature-settings: "cv02","cv03","cv04","cv11"; overflow-x: hidden; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ── Header ────────────────────────────────── */
+  .header { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin-bottom: 20px; }
+  .header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .header h1 { font-size: 18px; margin-bottom: 8px; }
+  .meta { font-size: 12px; color: var(--dim); display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  .agents-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .agent-pill { font-size: 11px; padding: 3px 10px; border-radius: 20px;
+    border: 1px solid var(--border); background: var(--surface); }
+
+  /* ── Action buttons (top right) ────────────── */
+  .header-actions { display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+
+  /* ── Decision collapsible ──────────────────── */
+  .decision-collapse {
+    background: var(--surface); border: 2px solid var(--primary); border-radius: 12px;
+    margin-bottom: 20px; overflow: hidden;
+  }
+  .decision-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; cursor: pointer; transition: background 0.15s;
+    background: var(--primary-glow);
+  }
+  .decision-toggle:hover { background: var(--info-bg); }
+  .decision-toggle h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--success); font-weight: 600; margin: 0;
+  }
+  .decision-toggle .arrow {
+    font-size: 14px; color: var(--dim); transition: transform 0.2s;
+  }
+  .decision-collapse.open .arrow { transform: rotate(180deg); }
+  .decision-body {
+    max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
+  }
+  .decision-collapse.open .decision-body {
+    max-height: 5000px;
+  }
+  .decision-body-inner { padding: 20px 24px; }
+
+  /* ── Tabs ───────────────────────────────────── */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .tab { padding: 10px 20px; font-size: 13px; color: var(--dim); cursor: pointer;
+    border-bottom: 2px solid transparent; transition: all 0.15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .panel { display: none; min-width: 0; }
+  .panel.active { display: block; }
+
+  /* ── Content ────────────────────────────────── */
+  .main-col { min-width: 0; overflow-x: auto; }
+  .content { font-size: 14px; line-height: 1.8; overflow-wrap: break-word; word-break: break-word; max-width: 100%; }
+  .content h1 { font-size: 17px; color: var(--primary); margin: 20px 0 8px; word-break: break-word; font-weight: 700; }
+  .content h2 { font-size: 15px; color: var(--primary-text); margin: 18px 0 6px; word-break: break-word; font-weight: 600;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .content h3 { font-size: 13.5px; color: var(--text-secondary); margin: 14px 0 6px; font-weight: 600; letter-spacing: -0.01em; }
+  .content p { margin: 6px 0; }
+  .content strong { color: var(--text); }
+  .content code { background: var(--bg-mid); padding: 2px 6px; border-radius: 4px; font-size: 12px;
+    font-family: 'JetBrains Mono', monospace; word-break: break-all; }
+  .content pre { background: var(--bg); padding: 14px; border-radius: 8px; overflow-x: auto; margin: 10px 0;
+    border: 1px solid var(--border); }
+  .content ul, .content ol { padding-left: 20px; margin: 6px 0; }
+  .content li { margin: 4px 0; }
+  .content hr { border: none; height: 0; margin: 8px 0; }
+  .content blockquote { border-left: 3px solid var(--emerald); padding-left: 12px; color: var(--secondary);
+    margin: 8px 0; background: var(--success-bg); padding: 8px 12px; border-radius: 0 8px 8px 0; }
+  .config-view { font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: pre-wrap;
+    background: var(--surface); padding: 16px; border-radius: 8px; color: var(--secondary); }
+  .meta-view { font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: pre-wrap;
+    background: var(--surface); padding: 16px; border-radius: 8px; color: var(--secondary); }
+
+  /* ── Agent stats (as tab panel) ─────────────── */
+  .agent-stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .agent-stat-card {
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 14px; border-left: 3px solid var(--primary);
+  }
+  .agent-stat-card .name { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  .agent-stat-card .info { color: var(--dim); font-size: 11px; margin-top: 2px; }
+
+  /* ── Continuation chain ─────────────────────── */
+  .chain-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; color: var(--yellow); padding: 2px 8px;
+    border: 1px solid var(--warning-bg); border-radius: 6px;
+    text-decoration: none; transition: all 0.15s;
+  }
+  .chain-link:hover { border-color: var(--yellow); text-decoration: none; }
+
+  @media (max-width: 768px) {
+    body { padding: 12px 8px; }
+    .header { padding: 16px; }
+    .header h1 { font-size: 14px; }
+    .header-top { flex-direction: column; }
+    .header-actions { width: 100%; }
+    .header-actions .btn { flex: 1; text-align: center; font-size: 11px; padding: 6px 10px; }
+    .tab { padding: 8px 14px; font-size: 12px; }
+    .content h1 { font-size: 15px; }
+    .content h2 { font-size: 14px; }
+    .content { font-size: 13px; }
+    .content strong { word-break: break-word; }
+    .decision-body-inner { padding: 14px 12px; }
+    .agent-stats-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content" data-t="app.skip">Skip to content</a>
+<main id="main-content">
+<a class="back-link" href="/history" data-t="nav.all_debates">&larr; All Debates</a>
+<div class="header" id="header">
+  <div class="header-top">
+    <div style="flex:1;min-width:0;">
+      <h1 id="title" data-t="msg.loading">Loading...</h1>
+      <div class="meta" id="meta"></div>
+      <div id="chainLinks"></div>
+    </div>
+    <div class="header-actions" id="actions"></div>
+  </div>
+  <div class="agents-row" id="agents"></div>
+</div>
+<div id="decisionHighlight"></div>
+<div class="main-col">
+  <div class="tabs" id="tabs"></div>
+  <div id="panels"></div>
+</div>
+<script>
+const dir = window.location.pathname.split('/history/')[1];
+
+function toast(msg) { showToast(msg, 'info'); }
+
+async function load() {
+  const metaRes = await fetch(`/api/debate-file?dir=${encodeURIComponent(dir)}&file=meta.json`);
+  const meta = JSON.parse(await metaRes.text());
+
+  document.title = meta.topic || dir;
+  document.getElementById('title').textContent = meta.topic || dir;
+  const date = meta.date ? new Date(meta.date).toLocaleString() : '';
+  document.getElementById('meta').innerHTML = `
+    <span>${date}</span>
+    <span>${t('debate.turns_count', {n: meta.turns || 0})}</span>
+    <span>${meta.mode || ''}</span>
+    ${meta.done_reason ? '<span>' + meta.done_reason + '</span>' : ''}`;
+
+  const agents = meta.agents || [];
+  const colors = [COLORS.primary,COLORS.emerald,COLORS.cyan,COLORS.purple,COLORS.orange,COLORS.warning];
+  document.getElementById('agents').innerHTML = agents.map((a, i) =>
+    `<span class="agent-pill" style="border-color:${colors[i%colors.length]}40;color:${colors[i%colors.length]}">
+      ${a.name} <span style="color:var(--dim);margin-left:4px;">${a.model}</span>
+    </span>`).join('');
+
+  // ── Action buttons (top) ──
+  document.getElementById('actions').innerHTML = `
+    <button class="btn success" onclick="doContinue()">${t('btn.continue')}</button>
+    <button class="btn" onclick="doPDF()">${t('btn.pdf')}</button>
+    <button class="btn" onclick="doA2A()">${t('btn.a2a')}</button>
+    <button class="btn danger" onclick="doDelete()">${t('btn.delete')}</button>`;
+
+  // ── Decision (collapsed) ──
+  let hasDecision = false;
+  try {
+    const dRes = await fetch(`/api/debate-file?dir=${encodeURIComponent(dir)}&file=decision.md`);
+    if (dRes.ok) {
+      hasDecision = true;
+      const dText = await dRes.text();
+      document.getElementById('decisionHighlight').innerHTML = `
+        <div class="decision-collapse" id="decisionCollapse">
+          <div class="decision-toggle" onclick="toggleDecision()">
+            <h2>${t('section.decision_summary')}</h2>
+            <span class="arrow">&#x25BC;</span>
+          </div>
+          <div class="decision-body">
+            <div class="decision-body-inner content">${md(dText)}</div>
+          </div>
+        </div>`;
+    }
+  } catch(e) {}
+
+  // ── Build tabs (no Decision tab) ──
+  const tabs = [{id:'transcript', label:t('tab.transcript'), file:'transcript.md', type:'md'}];
+  tabs.push({id:'config', label:t('tab.config'), file:'config.yaml', type:'raw'});
+  tabs.push({id:'meta', label:t('tab.stats'), file:'meta.json', type:'json'});
+  if (meta.agent_stats) tabs.push({id:'agents', label:t('tab.agents'), type:'custom'});
+
+  document.getElementById('tabs').innerHTML = tabs.map((tab, i) =>
+    `<div class="tab ${i===0?'active':''}" onclick="showTab('${tab.id}')">${tab.label}</div>`).join('');
+
+  // ── Render panels ──
+  let panelsHtml = '';
+  for (const tab of tabs) {
+    if (tab.type === 'custom') {
+      // Agents panel
+      const statsHtml = (meta.agent_stats || []).map((a, i) => {
+        const intents = Object.entries(a.intents||{}).map(([k,v])=>`${k} &times;${v}`).join(', ');
+        const status = a.yielded
+          ? `<span style="color:var(--warning)">${t('table.yielded')}</span>`
+          : `<span style="color:var(--success)">${t('table.active')}</span>`;
+        return `<div class="agent-stat-card" style="border-left-color:${colors[i%colors.length]}">
+          <div class="name" style="color:${colors[i%colors.length]}">${a.name}</div>
+          <div class="info">${t('debate.turns_count', {n: a.turns})} &middot; ${status}</div>
+          <div class="info">${intents || t('msg.no_intents')}</div>
+        </div>`;
+      }).join('');
+      panelsHtml += `<div class="panel" id="panel-agents"><div class="agent-stats-grid">${statsHtml}</div></div>`;
+      continue;
+    }
+    const res = await fetch(`/api/debate-file?dir=${encodeURIComponent(dir)}&file=${tab.file}`);
+    const text = await res.text();
+    let body = '';
+    if (tab.type === 'md') {
+      body = `<div class="content">${md(text)}</div>`;
+    } else if (tab.type === 'json') {
+      try { body = `<div class="meta-view">${JSON.stringify(JSON.parse(text), null, 2)}</div>`; }
+      catch { body = `<div class="meta-view">${text}</div>`; }
+    } else {
+      body = `<div class="config-view">${text}</div>`;
+    }
+    panelsHtml += `<div class="panel ${tab === tabs[0] ? 'active' : ''}" id="panel-${tab.id}">${body}</div>`;
+  }
+  document.getElementById('panels').innerHTML = panelsHtml;
+
+  // ── Continuation chain ──
+  if (meta.parent_chain && meta.parent_chain.length) {
+    const links = meta.parent_chain.map((p, i) =>
+      `<a class="chain-link" href="/history/${p}">${t('detail.round', {n: i+1})}</a>`).join(' ');
+    document.getElementById('chainLinks').innerHTML = `<div style="margin-top:8px;">${links}</div>`;
+  }
+}
+
+function toggleDecision() {
+  document.getElementById('decisionCollapse').classList.toggle('open');
+}
+
+function showTab(id) {
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('panel-' + id).classList.add('active');
+}
+
+function doContinue() {
+  const old = document.getElementById('continuePanel');
+  if (old) { old.remove(); return; }
+  const html = `<div id="continuePanel" style="margin-top:20px;padding:20px;background:var(--card);border:1px solid var(--success);border-radius:12px;">
+    <h3 style="color:var(--success);margin-bottom:8px;">${t('section.continue_debate')}</h3>
+    <p style="color:var(--dim);font-size:12px;margin-bottom:12px;">${t('msg.continue_instruction')}</p>
+    <textarea id="continueMsg" placeholder="${t('placeholder.continue_topic')}" style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;outline:none;min-height:80px;resize:vertical;font-family:inherit;"></textarea>
+    <div style="display:flex;gap:10px;margin-top:12px;">
+      <button class="btn success" id="continueGoBtn" onclick="doLaunchContinue()">${t('btn.go')}</button>
+      <button class="btn" onclick="document.getElementById('continuePanel').remove()">${t('btn.cancel')}</button>
+    </div>
+  </div>`;
+  document.querySelector('.main-col').insertAdjacentHTML('beforeend', html);
+  document.getElementById('continueMsg').focus();
+}
+
+async function doLaunchContinue() {
+  const msg = document.getElementById('continueMsg').value.trim();
+  if (!msg) { toast(t('toast.write_first')); return; }
+  const btn = document.getElementById('continueGoBtn');
+  btn.disabled = true; btn.textContent = t('btn.starting');
+  try {
+    const res = await fetch('/api/continue', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({debate_dir: dir, message: msg, turns: 6})
+    });
+    const result = await res.json();
+    if (result.ok) { window.location.href = '/debate'; }
+    else { toast(result.error || 'Failed'); btn.disabled = false; btn.textContent = t('btn.go'); }
+  } catch(e) { toast('Error: ' + e.message); btn.disabled = false; btn.textContent = t('btn.go'); }
+}
+
+async function doDelete() {
+  if (!confirm(t('msg.delete_confirm'))) return;
+  const res = await fetch('/api/debate?dir=' + encodeURIComponent(dir), {method: 'DELETE'});
+  if (res.ok) window.location.href = '/history';
+}
+
+function doPDF() {
+  window.location.href = '/api/debate-pdf?dir=' + encodeURIComponent(dir);
+}
+
+async function doA2A() {
+  const res = await fetch(`/api/debate-a2a?dir=${encodeURIComponent(dir)}`);
+  const data = await res.json();
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = dir + '.a2a.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+load();
+</script>
+</main>
+</body>
+</html>

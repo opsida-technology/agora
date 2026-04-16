@@ -17,17 +17,23 @@ web UI accessible from any device on the network.
 ## Quick Start
 
 ```bash
-pip install pyyaml
+# Install
+pip install -e .
 
 # Launch the dashboard (no config needed)
-python -m agora.web
+agora
+# or: python -m agora.web
 
-# Or auto-start a debate
-python -m agora.web configs/hybrid.yaml
+# Auto-start a debate
+agora configs/hybrid.yaml
 
 # Terminal mode (no web UI)
-pip install rich
+pip install -e ".[tui]"
 python debate.py configs/mlx_offline.yaml
+
+# Run tests
+pip install -e ".[dev]"
+pytest
 ```
 
 The dashboard opens at `http://localhost:8420` and is accessible from
@@ -36,17 +42,21 @@ any device on your LAN.
 ## Web Dashboard
 
 The dashboard at `/` lets you:
-- **Browse configs** — see all YAML configs, click to edit
+- **Browse configs** — latest 4 configs on dashboard, full list at `/configs`
+- **Config editor modal** — click any config card to edit (YAML + form UI)
+- **Start debate modal** — pick a config from the list, confirm to start
 - **Create new configs** — template with all CLI/backend options
-- **Edit configs** — YAML text editor + form UI with agent builder
 - **Copy / Paste / Delete** configs
 - **Start & Stop** debates from the browser
 - **View live debate** at `/debate` with token-by-token streaming
 - **Interaction map** — canvas chart showing who addressed whom
 - **Past debates** at `/history` — browse transcripts, decisions, configs
+- **Debate detail** — collapsible decision summary, agents tab, action buttons at top
 - **Compare debates** — side-by-side diff of two past debates
+- **Continue debates** — pick up where a previous debate left off
 - **Export to PDF** — print-friendly view from history
 
+All pages use a shared design system (`base.css`) with consistent tokens.
 Everything is mobile-optimized with touch targets and safe area support.
 
 ## Project Structure
@@ -62,9 +72,19 @@ agora/
   web.py             — Dashboard + live debate UI (stdlib HTTP server)
   health.py          — Pre-flight CLI health checks
   save.py            — Auto-save transcripts to Markdown + JSON
+  static/
+    base.css         — shared design system (tokens, components, a11y)
+    base.js          — shared utilities (toast, tabs, markdown, focus trap)
+  templates/
+    dashboard.html   — main dashboard with config cards & modals
+    configs.html     — full config listing page
+    debate.html      — live debate streaming view
+    history.html     — past debates browser with compare
+    detail.html      — single debate detail (decision, transcript, agents)
 debate.py            — CLI entry point (thin wrapper)
 configs/             — debate configurations (YAML)
 debates/             — auto-saved transcripts per debate (gitignored)
+tests/               — pytest suite (protocol, eventbus, server endpoints)
 AGORA_PROTOCOL.md    — protocol specification
 ```
 
@@ -171,7 +191,7 @@ Agents can also emit structured claims:
 Every completed (or stopped) debate is automatically saved to `debates/`:
 
 ```
-debates/2026-04-13_0923_should-we-fine-tune-or/
+debates/2026-04-13_0923_should-opsida-build/
   transcript.md    — full conversation log
   decision.md      — moderator's decision summary
   config.yaml      — snapshot of the config used
@@ -229,3 +249,8 @@ topic, agents, messages = from_a2a(envelope)
 - [x] Health checks with graceful degradation
 - [x] LAN access (0.0.0.0 binding)
 - [x] Export to PDF
+- [x] Config editor & start debate modals
+- [x] All configs page with search (`/configs`)
+- [x] Collapsible decision summary in debate detail
+- [x] Shared design system (`base.css` / `base.js`)
+- [x] Continue debate from history

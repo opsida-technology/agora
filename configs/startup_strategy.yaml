@@ -1,47 +1,93 @@
-# startup_strategy.yaml
-# Four-agent startup strategy debate.
-# Useful for testing strategic decisions with diverse perspectives.
+# startup_strategy.yaml — Four-agent startup strategy debate
+# Showcases: context, orchestration with phases, final_output_contract
 
-topic: "Should we raise a seed round now or bootstrap to profitability first?"
-max_turns: 16
+topic: |
+  Should we raise a seed round now or bootstrap to profitability first?
+  We need a concrete decision with conditions and timeline.
+
+context: |
+  Company profile:
+  - B2B SaaS, developer tools space
+  - 2 technical co-founders, 1 part-time designer
+  - 8 months since founding, MVP launched 3 months ago
+  - $15K MRR, 40 paying customers, 3.5% monthly churn
+  - $180K remaining runway at current burn ($22K/month)
+  - Two competing products raised Series A last quarter
+  - Primary growth channel: content marketing + word of mouth
+  - Unit economics: CAC ~$400, LTV ~$2,800 (estimated)
+
+max_turns: 20
+language: English
+anti_consensus: true
+
+orchestration:
+  turn_order: [growth-advocate, bootstrap-defender, investor-lens, operator-check]
+  phase_plan:
+    - phase: 1
+      turns: 1-6
+      objective: Present core positions — raise vs bootstrap
+    - phase: 2
+      turns: 7-14
+      objective: Stress-test with specific scenarios and numbers
+    - phase: 3
+      turns: 15-20
+      objective: Converge on a recommendation with clear conditions
+  final_output_contract: |
+    1. Decision: Raise now, raise later (with trigger), or bootstrap
+    2. If raising: target amount, use of funds, timeline
+    3. If bootstrapping: path to profitability with milestones
+    4. Risk factors that would reverse this decision
+    5. 90-day action plan regardless of funding decision
 
 agents:
   - name: growth-advocate
     backend: cli
-    command: ["claude", "-p"]
-    timeout: 120
+    command: ["claude", "-p", "--allowedTools", "WebSearch,WebFetch"]
+    timeout: 180
+    turn_budget: 7
     system: |
-      You are a growth-stage startup advisor. Argue that raising capital
-      now is the right move: market timing, competitive moats, talent
-      acquisition. Be specific about what capital enables that bootstrapping
-      cannot. 5-7 sentences per turn.
+      You are a growth-stage startup advisor who has helped 30+ companies
+      raise seed rounds. Argue that raising capital now is the right move:
+      market timing, competitive moats, talent acquisition window.
+      Use web search to cite comparable raises in the dev tools space.
+      Be specific about what capital enables that bootstrapping cannot.
+      5-7 sentences per turn.
 
   - name: bootstrap-defender
     backend: cli
     command: ["claude", "-p"]
     timeout: 120
+    turn_budget: 6
     system: |
       You are a bootstrapped founder who built a $10M ARR company without
-      VC. Argue for profitability first: control, focus, sustainable unit
-      economics. Challenge every "we need capital for X" with "can you
-      do X smaller and prove it first?" 5-7 sentences per turn.
+      VC funding. Argue for profitability first: control, focus, sustainable
+      unit economics, no dilution. Challenge every "we need capital for X"
+      with "can you do X smaller and prove it first?"
+      Use the company's actual numbers to make your case.
+      5-7 sentences per turn.
 
   - name: investor-lens
     backend: cli
     command: ["gemini", "-p"]
-    timeout: 120
+    timeout: 180
+    turn_budget: 5
     system: |
       You are a seed-stage VC who has seen 200 pitches this year. You
       don't take sides — you ask the questions that founders avoid:
-      What's the burn multiple? Customer payback period? Why now?
+      What's the burn multiple? Customer payback period? Why now vs
+      6 months from now? What does the cap table look like post-raise?
+      Search for current market data on seed valuations.
       4-6 sentences per turn.
 
   - name: operator-check
     backend: cli
     command: ["codex", "exec"]
     timeout: 120
+    turn_budget: 5
     system: |
       You are a COO who has scaled two startups through Series A. You
       care about execution reality: hiring timelines, sales cycles,
       product velocity. Translate every strategic argument into
-      operational feasibility. 4-6 sentences per turn.
+      operational feasibility. If someone says "hire 3 engineers,"
+      you respond with timeline and cost to productivity.
+      4-6 sentences per turn.

@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Agora — Past Debates</title>
+<link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+<link rel="stylesheet" href="/static/base.css">
+<script src="/static/base.js"></script>
+<script src="/static/i18n.js"></script>
+<style>
+  /* Aliases — base.css has the canonical tokens */
+  :root {
+    --accent: var(--primary); --accent-hover: var(--primary-hover);
+    --green: var(--success); --yellow: var(--warning); --red: var(--danger);
+    --radius: var(--radius-md);
+  }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: "cv02","cv03","cv04","cv11";
+    background: var(--bg); color: var(--text);
+    padding: 0;
+    line-height: 1.6;
+  }
+  .back-link {
+    color: var(--dim); font-size: 12px; text-decoration: none;
+    margin-bottom: 16px; display: inline-flex; align-items: center; gap: 6px;
+    transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--accent); }
+  h1 {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 4px;
+    color: var(--primary);
+  }
+  .subtitle { color: var(--dim); font-size: 13px; margin-bottom: 24px; }
+  /* .btn from base.css */
+
+  /* Search */
+  .search-bar {
+    display: flex; gap: 10px; margin-bottom: 20px; align-items: center;
+  }
+  .search-input {
+    flex: 1; padding: 10px 16px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text); font-size: 13px; font-family: inherit;
+    outline: none; transition: border-color 0.2s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--dim); }
+
+  /* Date groups */
+  .date-group { margin-bottom: 8px; }
+  .date-group-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--dim); font-weight: 600; padding: 8px 0 6px;
+    border-bottom: 1px solid var(--border); margin-bottom: 12px;
+  }
+
+  /* Continuation indicator */
+  .continuation-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--orange); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  .debate-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+  .debate-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 24px; cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); position: relative;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .debate-card:hover {
+    border-color: rgba(59,130,246,0.5);
+    box-shadow: 0 8px 32px var(--primary-glow);
+    transform: translateY(-2px);
+  }
+  .debate-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 4px 24px var(--primary-glow);
+  }
+  .debate-card .topic {
+    font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 8px;
+    letter-spacing: -0.01em; word-break: break-word;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .debate-card .meta {
+    font-size: 12px; color: var(--dim); display: flex; gap: 16px; flex-wrap: wrap;
+    align-items: center;
+  }
+  .debate-card .meta span { white-space: nowrap; }
+  .debate-card .meta .agents-list { white-space: normal; word-break: break-word; }
+  .btn-delete {
+    position: absolute; top: 12px; right: 12px; background: none;
+    border: 1px solid transparent; border-radius: 6px; color: var(--dim);
+    cursor: pointer; padding: 2px 8px; font-size: 14px; opacity: 0;
+    transition: all 0.2s;
+  }
+  .debate-card:hover .btn-delete { opacity: 0.6; }
+  .btn-delete:hover { opacity: 1 !important; color: var(--red); border-color: var(--red); }
+  .badge {
+    display: inline-flex; align-items: center; padding: 2px 10px;
+    border-radius: 9999px; font-size: 10px; font-weight: 600;
+    letter-spacing: 0.3px; text-transform: uppercase;
+  }
+  .badge.green {
+    background: rgba(34,197,94,0.1); color: var(--green);
+    border: 1px solid rgba(34,197,94,0.25);
+  }
+  .badge.yellow {
+    background: rgba(234,179,8,0.1); color: var(--yellow);
+    border: 1px solid rgba(234,179,8,0.25);
+  }
+
+  .viewer {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; display: none;
+  }
+  .viewer-tabs {
+    display: flex; border-bottom: 1px solid var(--border);
+    padding: 6px 8px 0; gap: 4px; background: var(--bg-mid);
+  }
+  .viewer-tab {
+    padding: 8px 18px; font-size: 12px; color: var(--dim);
+    cursor: pointer; border-radius: 8px 8px 0 0;
+    transition: all 0.2s; border: 1px solid transparent;
+    border-bottom: none; font-weight: 500;
+  }
+  .viewer-tab:hover { color: var(--text-secondary); background: rgba(30,41,59,0.5); }
+  .viewer-tab.active {
+    color: var(--text); background: var(--surface);
+    border-color: var(--border); border-bottom-color: var(--surface);
+    margin-bottom: -1px; font-weight: 600;
+  }
+  .viewer-content {
+    padding: 24px; max-height: 70vh; overflow-y: auto;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 13px; line-height: 1.7; white-space: pre-wrap;
+    word-wrap: break-word; word-break: break-word; color: var(--text-secondary);
+  }
+  .viewer-content::-webkit-scrollbar { width: 6px; }
+  .viewer-content::-webkit-scrollbar-track { background: transparent; }
+  .viewer-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .viewer-content.md {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-feature-settings: "cv02","cv03","cv04","cv11";
+    white-space: normal;
+  }
+  .viewer-content.md h1 { font-size: 18px; color: var(--accent); margin: 20px 0 10px; font-weight: 700; }
+  .viewer-content.md h2 { font-size: 15px; color: var(--accent-hover); margin: 16px 0 8px; font-weight: 600; }
+  .viewer-content.md h3 { font-size: 14px; color: var(--cyan); margin: 14px 0 6px; font-weight: 600; }
+  .viewer-content.md p { margin: 8px 0; color: var(--text-secondary); }
+  .viewer-content.md strong { color: var(--text); }
+  .viewer-content.md em { color: var(--text-secondary); font-style: italic; }
+  .viewer-content.md code {
+    background: var(--bg); padding: 2px 6px; border-radius: 4px;
+    font-size: 12px; font-family: 'SF Mono', 'Cascadia Code', monospace;
+    border: 1px solid var(--border);
+  }
+  .viewer-content.md pre {
+    background: var(--bg); padding: 14px; border-radius: 8px;
+    overflow-x: auto; margin: 10px 0; border: 1px solid var(--border);
+  }
+  .viewer-content.md pre code { border: none; padding: 0; background: none; }
+  .viewer-content.md ul, .viewer-content.md ol { padding-left: 22px; margin: 8px 0; }
+  .viewer-content.md li { margin: 4px 0; color: var(--text-secondary); }
+  .viewer-content.md hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .viewer-content.md blockquote {
+    border-left: 3px solid var(--emerald); padding: 8px 14px;
+    color: var(--text-secondary); margin: 10px 0;
+    background: rgba(16,185,129,0.05); border-radius: 0 var(--radius) var(--radius) 0;
+  }
+  .viewer-content.md a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
+  .viewer-content.md a:hover { color: var(--accent-hover); text-decoration: underline; }
+  .viewer-content.md table { border-collapse: collapse; margin: 10px 0; }
+  .viewer-content.md th, .viewer-content.md td {
+    padding: 8px 12px; border: 1px solid var(--border); font-size: 12px;
+  }
+  .viewer-content.md th { background: var(--bg-mid); color: var(--dim); text-align: left; font-weight: 600; }
+
+  .empty {
+    text-align: center; padding: 80px 20px; color: var(--dim); font-size: 14px;
+  }
+  .empty::before {
+    content: '';
+    display: block; width: 48px; height: 48px; margin: 0 auto 16px;
+    border-radius: 50%; border: 2px dashed var(--border);
+    background: var(--primary-glow);
+  }
+
+  @media (max-width: 768px) {
+    body { padding: 12px 8px; }
+    h1 { font-size: 18px; }
+    .debate-card { padding: 14px; }
+    .debate-card .topic { font-size: 13px; }
+    .debate-card .meta { font-size: 11px; gap: 10px; }
+    .viewer-content { padding: 16px; font-size: 12px; max-height: 60vh; }
+    .viewer-tabs { padding: 4px 6px 0; }
+    .viewer-tab { padding: 8px 14px; font-size: 11px; }
+  }
+
+  @supports (padding-top: env(safe-area-inset-top)) {
+    body { padding-top: calc(12px + env(safe-area-inset-top));
+           padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content" data-t="app.skip">Skip to content</a>
+<main id="main-content" style="max-width:1400px;margin:0 auto;padding:24px 16px;">
+<a class="back-link" href="/" data-t="nav.back_dashboard">&larr; Dashboard</a>
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+  <div>
+    <h1 data-t="heading.past_debates">Past Debates</h1>
+    <div class="subtitle" data-t="heading.past_debates_sub">Saved transcripts and decisions</div>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button class="btn" id="compareBtn" onclick="toggleCompare()" style="font-size:12px;padding:6px 14px;" data-t="btn.compare">Compare</button>
+    <button class="btn" id="exportBtn" onclick="exportPDF()" style="font-size:12px;padding:6px 14px;display:none;" data-t="btn.pdf">PDF</button>
+    <button class="btn" id="a2aBtn" onclick="exportA2A()" style="font-size:12px;padding:6px 14px;display:none;" data-t="btn.a2a_json">A2A JSON</button>
+    <button class="btn" id="continueBtn" onclick="continueDebate()" style="font-size:12px;padding:6px 14px;display:none;border-color:var(--emerald);color:var(--emerald);" data-t="btn.continue">Continue</button>
+  </div>
+</div>
+<div class="search-bar">
+  <input type="text" class="search-input" id="searchInput" placeholder="Search debates..." data-t-placeholder="placeholder.search_debates" oninput="filterDebates()">
+</div>
+<div id="compareBar" style="display:none;padding:10px 14px;background:var(--surface);border:1px solid var(--accent);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--accent);">
+  <span data-t="msg.compare_instruction">Select two debates to compare.</span> <button class="btn" onclick="runCompare()" style="font-size:11px;padding:4px 12px;margin-left:8px;" id="runCompareBtn" disabled data-t="btn.compare_selected">Compare Selected</button>
+  <button class="btn" onclick="toggleCompare()" style="font-size:11px;padding:4px 12px;margin-left:4px;" data-t="btn.cancel">Cancel</button>
+</div>
+<div id="continueQuiz" style="display:none;margin-bottom:16px;padding:20px;background:var(--surface);border:1px solid var(--success-bg);border-radius:12px;">
+  <h3 style="color:var(--emerald);font-size:14px;margin-bottom:12px;" data-t="heading.followup_questions">Follow-up Questions</h3>
+  <p style="color:var(--dim);font-size:12px;margin-bottom:16px;" data-t="msg.quiz_followup">Answer these to guide the next round of debate.</p>
+  <div id="continueQuizQuestions"></div>
+  <div style="display:flex;gap:10px;margin-top:16px;">
+    <button class="btn" onclick="submitContinueQuiz()" style="border-color:var(--emerald);color:var(--emerald);" data-t="btn.continue_with_answers">Continue with Answers</button>
+    <button class="btn" onclick="skipContinueQuiz()" data-t="btn.skip">Skip</button>
+    <button class="btn" onclick="document.getElementById('continueQuiz').style.display='none'" style="color:var(--dim);" data-t="btn.cancel">Cancel</button>
+  </div>
+</div>
+<div class="debate-list" id="debateList"></div>
+<div class="viewer" id="viewer">
+  <div class="viewer-tabs" id="viewerTabs"></div>
+  <div class="viewer-content md" id="viewerContent"></div>
+</div>
+<div id="compareView" style="display:none;">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div class="viewer" style="display:block;">
+      <div class="viewer-tabs" id="compareTabs1"></div>
+      <div class="viewer-content md" id="compareContent1" style="max-height:60vh;"></div>
+    </div>
+    <div class="viewer" style="display:block;">
+      <div class="viewer-tabs" id="compareTabs2"></div>
+      <div class="viewer-content md" id="compareContent2" style="max-height:60vh;"></div>
+    </div>
+  </div>
+</div>
+<script>
+let debates = [];
+let selectedDir = null;
+
+// md() is provided by /static/base.js
+
+function _dateGroup(dateStr) {
+  if (!dateStr) return 'Unknown';
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diff = (now - d) / 86400000;
+  if (diff < 1 && d.getDate() === now.getDate()) return t('date.today');
+  if (diff < 2) return t('date.yesterday');
+  if (diff < 7) return t('date.this_week');
+  if (diff < 30) return t('date.this_month');
+  return d.toLocaleDateString('en', {year:'numeric', month:'long'});
+}
+
+function _renderDebateCard(d) {
+  const date = d.date ? new Date(d.date).toLocaleString() : d.dir;
+  const agentNames = (d.agents || []).map(a => a.name);
+  const agentTags = agentNames.map(n => `<span class="agent-tag">${n}</span>`).join('');
+  const agentMore = agentNames.length > 3
+    ? `<span class="agent-more" aria-label="${agentNames.slice(3).join(', ')}">+${agentNames.length - 3}</span>` : '';
+  const isSelected = compareMode ? compareSelections.includes(d.dir) : selectedDir === d.dir;
+  const clickFn = compareMode ? `selectDebateForCompare('${d.dir}')` : `window.location.href='/history/${d.dir}'`;
+  const isContinuation = d.parent_debate ? '<span class="continuation-badge">' + t('badge.continuation') + '</span> · ' : '';
+  return `
+    <div class="debate-card ${isSelected ? 'selected' : ''}"
+         onclick="${clickFn}">
+      <div class="topic">${d.topic || d.dir}</div>
+      <div class="meta">
+        ${isContinuation}
+        <span>${date}</span>
+        <span>${t('debate.turns_count', {n: d.turns || 0})}</span>
+        ${agentNames.length ? '<span class="agents-list">' + agentTags + agentMore + '</span>' : ''}
+        ${d.has_decision ? '<span class="badge green">' + t('badge.decision') + '</span>' : ''}
+        ${d.done_reason && d.done_reason.includes('stopped') ? '<span class="badge yellow">' + t('badge.partial') + '</span>' : ''}
+      </div>
+      <button class="btn-delete" onclick="event.stopPropagation();deleteDebate('${d.dir}')" title="Delete">✕</button>
+    </div>`;
+}
+
+let _allDebates = [];
+
+async function loadDebates() {
+  const res = await fetch('/api/debates');
+  debates = await res.json();
+  _allDebates = debates;
+  renderDebateList(debates);
+}
+
+function filterDebates() {
+  const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
+  if (!q) { renderDebateList(_allDebates); return; }
+  const filtered = _allDebates.filter(d =>
+    (d.topic||'').toLowerCase().includes(q) ||
+    (d.agents||[]).some(a => a.name.toLowerCase().includes(q)) ||
+    (d.dir||'').toLowerCase().includes(q));
+  renderDebateList(filtered);
+}
+
+function renderDebateList(items) {
+  const list = document.getElementById('debateList');
+  if (!items.length) {
+    list.innerHTML = '<div class="empty">' + t('msg.no_debates') + '</div>';
+    return;
+  }
+
+  // Group continuations under parents
+  const parentMap = {};
+  const roots = [];
+  items.forEach(d => {
+    if (d.parent_debate) {
+      if (!parentMap[d.parent_debate]) parentMap[d.parent_debate] = [];
+      parentMap[d.parent_debate].push(d);
+    } else {
+      roots.push(d);
+    }
+  });
+  // Also show continuations whose parent isn't in the list
+  items.forEach(d => {
+    if (d.parent_debate && !roots.find(r => r.dir === d.parent_debate)) {
+      roots.push(d);
+    }
+  });
+
+  // Group by date
+  const groups = {};
+  roots.forEach(d => {
+    const g = _dateGroup(d.date);
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(d);
+  });
+
+  let html = '';
+  for (const [label, items] of Object.entries(groups)) {
+    html += `<div class="date-group">
+      <div class="date-group-label">${label}</div>
+      <div class="debate-list">`;
+    items.forEach(d => {
+      html += _renderDebateCard(d);
+      // Show continuations nested
+      const children = parentMap[d.dir] || [];
+      children.forEach(c => {
+        html += `<div style="margin-left:24px;border-left:2px solid var(--orange);padding-left:12px;">`;
+        html += _renderDebateCard(c);
+        html += `</div>`;
+      });
+    });
+    html += `</div></div>`;
+  }
+  list.innerHTML = html;
+}
+
+async function deleteDebate(dir) {
+  if (!confirm(t('msg.delete_confirm'))) return;
+  const res = await fetch('/api/debate?dir=' + encodeURIComponent(dir), {method: 'DELETE'});
+  if (res.ok) {
+    if (selectedDir === dir) { selectedDir = null; document.getElementById('viewer').style.display = 'none'; }
+    loadDebates();
+  }
+}
+
+async function selectDebate(dir) {
+  selectedDir = dir;
+  loadDebates();
+  document.getElementById('compareView').style.display = 'none';
+  document.getElementById('exportBtn').style.display = '';
+  document.getElementById('a2aBtn').style.display = '';
+  document.getElementById('continueBtn').style.display = '';
+  const d = debates.find(x => x.dir === dir);
+  const viewer = document.getElementById('viewer');
+  viewer.style.display = 'block';
+
+  // Build tabs
+  const tabs = [{label: t('tab.transcript'), file: 'transcript.md'}];
+  if (d && d.has_decision) tabs.push({label: t('tab.decision'), file: 'decision.md'});
+  if (d && d.has_config) tabs.push({label: t('tab.config'), file: 'config.yaml'});
+  tabs.push({label: t('tab.meta'), file: 'meta.json'});
+
+  document.getElementById('viewerTabs').innerHTML = tabs.map((t, i) =>
+    `<div class="viewer-tab ${i === 0 ? 'active' : ''}" onclick="loadFile('${dir}', '${t.file}', this)">${t.label}</div>`
+  ).join('');
+
+  loadFile(dir, 'transcript.md', document.querySelector('.viewer-tab'));
+  viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function loadFile(dir, file, tabEl) {
+  document.querySelectorAll('.viewer-tab').forEach(el => el.classList.remove('active'));
+  if (tabEl) tabEl.classList.add('active');
+
+  const res = await fetch(`/api/debate-file?dir=${encodeURIComponent(dir)}&file=${encodeURIComponent(file)}`);
+  const text = await res.text();
+  const content = document.getElementById('viewerContent');
+
+  if (file.endsWith('.md')) {
+    content.className = 'viewer-content md';
+    content.innerHTML = md(text);
+  } else if (file.endsWith('.json')) {
+    content.className = 'viewer-content';
+    try { content.textContent = JSON.stringify(JSON.parse(text), null, 2); }
+    catch { content.textContent = text; }
+  } else {
+    content.className = 'viewer-content';
+    content.textContent = text;
+  }
+}
+
+// ── Compare mode ──
+let compareMode = false;
+let compareSelections = [];
+
+function toggleCompare() {
+  compareMode = !compareMode;
+  compareSelections = [];
+  document.getElementById('compareBar').style.display = compareMode ? '' : 'none';
+  document.getElementById('compareBtn').textContent = compareMode ? t('btn.cancel') : t('btn.compare');
+  document.getElementById('compareView').style.display = 'none';
+  document.getElementById('viewer').style.display = 'none';
+  document.getElementById('runCompareBtn').disabled = true;
+  selectedDir = null;
+  loadDebates();
+}
+
+function selectDebateForCompare(dir) {
+  const idx = compareSelections.indexOf(dir);
+  if (idx >= 0) { compareSelections.splice(idx, 1); }
+  else if (compareSelections.length < 2) { compareSelections.push(dir); }
+  document.getElementById('runCompareBtn').disabled = compareSelections.length !== 2;
+  loadDebates();
+}
+
+async function runCompare() {
+  if (compareSelections.length !== 2) return;
+  document.getElementById('viewer').style.display = 'none';
+  document.getElementById('compareView').style.display = '';
+
+  for (let side = 0; side < 2; side++) {
+    const dir = compareSelections[side];
+    const d = debates.find(x => x.dir === dir);
+    const tabsEl = document.getElementById('compareTabs' + (side + 1));
+    const contentEl = document.getElementById('compareContent' + (side + 1));
+
+    const tabs = [{label: t('tab.transcript'), file: 'transcript.md'}];
+    if (d && d.has_decision) tabs.push({label: t('tab.decision'), file: 'decision.md'});
+
+    tabsEl.innerHTML = `<div style="padding:8px 12px;font-size:11px;color:var(--cyan);border-bottom:1px solid var(--border)">${d ? d.topic : dir}</div>` +
+      tabs.map((t, i) =>
+        `<div class="viewer-tab ${i === 0 ? 'active' : ''}" onclick="loadCompareFile('${dir}', '${t.file}', this, ${side + 1})">${t.label}</div>`
+      ).join('');
+
+    const res = await fetch(`/api/debate-file?dir=${encodeURIComponent(dir)}&file=transcript.md`);
+    contentEl.innerHTML = md(await res.text());
+  }
+}
+
+async function loadCompareFile(dir, file, tabEl, side) {
+  const tabsContainer = tabEl.parentElement;
+  tabsContainer.querySelectorAll('.viewer-tab').forEach(el => el.classList.remove('active'));
+  tabEl.classList.add('active');
+  const res = await fetch(`/api/debate-file?dir=${encodeURIComponent(dir)}&file=${encodeURIComponent(file)}`);
+  const text = await res.text();
+  const el = document.getElementById('compareContent' + side);
+  if (file.endsWith('.md')) { el.className = 'viewer-content md'; el.innerHTML = md(text); }
+  else { el.className = 'viewer-content'; el.textContent = text; }
+}
+
+// ── PDF Export ──
+function exportPDF() {
+  if (!selectedDir) return;
+  const content = document.getElementById('viewerContent').innerHTML;
+  const d = debates.find(x => x.dir === selectedDir);
+  const title = d ? d.topic : selectedDir;
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>${title}</title>
+    <style>
+      body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #222; line-height: 1.7; font-size: 14px; }
+      h1 { font-size: 20px; color: #333; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+      h2 { font-size: 16px; color: #444; margin-top: 24px; }
+      h3 { font-size: 14px; color: #555; }
+      code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 12px; }
+      pre { background: #f4f4f4; padding: 12px; border-radius: 4px; overflow-x: auto; }
+      blockquote { border-left: 3px solid #ddd; padding-left: 12px; color: #666; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { padding: 6px 10px; border: 1px solid #ddd; font-size: 12px; }
+      th { background: #f8f8f8; }
+      hr { border: none; border-top: 1px solid #eee; margin: 20px 0; }
+      @media print { body { margin: 20px; } }
+    </style>
+  </head><body>${content}<script>setTimeout(()=>{window.print();},500)<\/script></body></html>`);
+  w.document.close();
+}
+
+async function continueDebate() {
+  if (!selectedDir) return;
+  const d = debates.find(x => x.dir === selectedDir);
+  if (!d) return;
+
+  // Read decision for context
+  let decisionText = '';
+  if (d.has_decision) {
+    try {
+      const res = await fetch(`/api/debate-file?dir=${encodeURIComponent(selectedDir)}&file=decision.md`);
+      if (res.ok) decisionText = await res.text();
+    } catch(e) {}
+  }
+
+  // Generate quiz from decision
+  toast(t('toast.analyzing'));
+  try {
+    const qRes = await fetch('/api/quiz', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({context: decisionText || d.topic, topic: d.topic, action: 'generate'})
+    });
+    const qData = await qRes.json();
+    if (qData.questions && qData.questions.length > 0) {
+      window._cqDir = selectedDir;
+      window._cqQuestions = qData.questions;
+      const colors = [COLORS.primary,COLORS.emerald,COLORS.cyan,COLORS.purple,COLORS.orange];
+      document.getElementById('continueQuizQuestions').innerHTML = qData.questions.map((q, i) => {
+        const col = colors[i % colors.length];
+        const opts = (q.options || []).map(opt =>
+          `<label style="display:flex;align-items:center;padding:6px 10px;margin:3px 0;cursor:pointer;border-radius:6px;border:1px solid var(--border);background:var(--border);">
+            <input type="radio" name="cq-${i}" value="${opt}" style="margin-right:8px;accent-color:${col};">
+            <span style="font-size:12px;color:rgba(224,231,255,0.8);">${opt}</span>
+          </label>`).join('');
+        return `<div style="margin-bottom:12px;padding:14px;border-left:3px solid ${col};border-radius:8px;background:rgba(15,23,42,0.4);">
+          <div style="font-size:13px;color:var(--text);margin-bottom:8px;">${i+1}. ${q.question}</div>
+          ${opts}
+          <input type="text" placeholder="${t('placeholder.type_answer')}" data-cq="${i}" style="width:100%;margin-top:6px;padding:8px;background:rgba(30,41,59,0.8);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none;">
+        </div>`;
+      }).join('');
+      document.getElementById('continueQuiz').style.display = '';
+      document.getElementById('continueQuiz').scrollIntoView({behavior:'smooth'});
+      return;
+    }
+  } catch(e) {}
+
+  // Fallback: simple prompt
+  const msg = prompt(t('msg.continue_question'));
+  if (!msg) return;
+  launchContinue(selectedDir, msg);
+}
+
+async function submitContinueQuiz() {
+  const questions = window._cqQuestions || [];
+  const answers = questions.map((q, i) => {
+    const sel = document.querySelector(`input[name="cq-${i}"]:checked`);
+    const custom = document.querySelector(`input[data-cq="${i}"]`)?.value;
+    return `Q: ${q.question}\nA: ${custom || (sel ? sel.value : 'No answer')}`;
+  }).join('\n\n');
+  document.getElementById('continueQuiz').style.display = 'none';
+  launchContinue(window._cqDir, answers);
+}
+
+function skipContinueQuiz() {
+  document.getElementById('continueQuiz').style.display = 'none';
+  const msg = prompt(t('msg.continue_direction')) || t('msg.continue_default');
+  launchContinue(window._cqDir, msg);
+}
+
+async function launchContinue(dir, message) {
+  const res = await fetch('/api/continue', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({debate_dir: dir, message: message, turns: 6})
+  });
+  const result = await res.json();
+  if (result.ok) {
+    toast(t('toast.debate_continued'));
+    window.location.href = '/debate';
+  } else {
+    toast(result.error || 'Failed', 'var(--red)');
+  }
+}
+
+async function exportA2A() {
+  if (!selectedDir) return;
+  const res = await fetch(`/api/debate-a2a?dir=${encodeURIComponent(selectedDir)}`);
+  const data = await res.json();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = selectedDir + '.a2a.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+loadDebates();
+</script>
+</main>
+</body>
+</html>

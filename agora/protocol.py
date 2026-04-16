@@ -10,7 +10,7 @@ discourse. Every agent appends a directive block to its reply:
     @next:      continue | yield | invite:<agent name>
 """
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -140,81 +140,4 @@ def to_a2a(messages: list, topic: str, agents: list[dict]) -> dict:
     }
 
 
-def from_a2a(payload: dict) -> tuple:
-    """Deserialize an A2A envelope back to (topic, agents, messages)."""
-    params = payload["params"]
-    topic = params["topic"]
-    agents = params["agents"]
-    messages = []
-    for entry in params["transcript"]:
-        messages.append(Message(
-            speaker=entry["speaker"],
-            turn=entry["turn"],
-            content=entry["content"],
-            intent=entry.get("intent", "propose"),
-            addressed=entry.get("addressed", "all"),
-            next_action=entry.get("next_action", "continue"),
-        ))
-    return topic, agents, messages
 
-
-# ── Structured Output Mode ─────────────────────────────────────────────
-
-CLAIM_RE = re.compile(
-    r"@claim\s*:\s*(.+?)\s*\|\s*evidence\s*:\s*(.+?)\s*\|\s*confidence\s*:\s*([\d.]+)",
-    re.MULTILINE | re.IGNORECASE,
-)
-COUNTER_RE = re.compile(r"^@counter\s*:\s*(.+?)\s*$", re.MULTILINE | re.IGNORECASE)
-
-
-@dataclass
-class StructuredMessage(Message):
-    claims: list = field(default_factory=list)   # [{claim, evidence, confidence}]
-    counter_to: Optional[str] = None             # which claim this counters
-
-
-def parse_structured_reply(raw: str, speaker: str, turn: int) -> StructuredMessage:
-    """Parse a reply into a StructuredMessage with claims and counter info."""
-    base = parse_reply(raw, speaker, turn)
-
-    claims = []
-    for m in CLAIM_RE.finditer(raw):
-        try:
-            confidence = float(m.group(3))
-        except ValueError:
-            confidence = 0.0
-        confidence = max(0.0, min(1.0, confidence))
-        claims.append({
-            "claim": m.group(1).strip(),
-            "evidence": m.group(2).strip(),
-            "confidence": confidence,
-        })
-
-    counter_match = COUNTER_RE.search(raw)
-    counter_to = counter_match.group(1).strip() if counter_match else None
-
-    return StructuredMessage(
-        speaker=base.speaker,
-        turn=base.turn,
-        content=base.content,
-        intent=base.intent,
-        addressed=base.addressed,
-        next_action=base.next_action,
-        claims=claims,
-        counter_to=counter_to,
-    )
-
-
-STRUCTURED_DIRECTIVES = """
-
-In addition to the standard Agora directives, you may include structured
-claims in your reply. Each claim should be on its own line using this format:
-
-@claim: <your claim text> | evidence: <supporting evidence> | confidence: <0.0-1.0>
-
-If your argument directly counters a previous claim, add:
-
-@counter: <the claim text you are countering>
-
-You may include multiple @claim lines. Place them before the standard
-@intent/@addressed/@next directive block."""

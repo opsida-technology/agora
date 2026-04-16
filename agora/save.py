@@ -151,6 +151,19 @@ def save_from_events(events: list[dict], cfg_path: str | None = None,
     if summary:
         meta["agent_stats"] = summary.get("agents", [])
 
+    # Track continuation chain from config
+    if cfg_text:
+        try:
+            import yaml as _yaml
+            _cfg = _yaml.safe_load(cfg_text)
+            if isinstance(_cfg, dict):
+                if _cfg.get("_parent_debate"):
+                    meta["parent_debate"] = _cfg["_parent_debate"]
+                if _cfg.get("_parent_chain"):
+                    meta["parent_chain"] = _cfg["_parent_chain"]
+        except Exception:
+            pass
+
     (out_dir / "meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 

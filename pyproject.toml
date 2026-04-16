@@ -1,0 +1,44 @@
+[project]
+name = "agora-protocol"
+version = "0.3.1"
+description = "Multi-agent discourse engine — structured debate between AI models"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Opsida" },
+]
+keywords = ["multi-agent", "debate", "discourse", "llm", "protocol", "a2a"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+tui = ["rich"]
+mlx = ["mlx-lm"]
+
+[project.urls]
+Homepage = "https://github.com/opsida/agora-protocol"
+Repository = "https://github.com/opsida/agora-protocol"
+
+[project.scripts]
+agora = "agora.web:_cli_main"
+agora-debate = "debate:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["agora*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
