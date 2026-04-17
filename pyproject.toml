@@ -1,6 +1,6 @@
 [project]
 name = "agora-protocol"
-version = "0.3.1"
+version = "0.3.2"
 description = "Multi-agent discourse engine — structured debate between AI models"
 readme = "README.md"
 license = "MIT"

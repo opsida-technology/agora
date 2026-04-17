@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.2 (2026-04-17)
+
+### Fixed
+- URL-encoded Turkish characters in debate directory names (detail.html `decodeURIComponent`)
+- Sticky timeline rail with scroll on debate view
+- Hardcoded `#1e293b` background replaced with `var(--bg-mid)` token
+- Intervene bar overlap — added bottom padding to debate pane (90px)
+- Pre-debate quiz is now optional via confirm dialog (was forced)
+
+### Changed
+- `AGENT_COLORS` rewritten as Proxy for live CSS-var resolution
+- Minimal language selector — EN/TR labels (smaller, no native checkmark)
+
+### Added
+- New i18n keys: `msg.quiz_confirm`, `toast.quiz_wait`, `toast.quiz_no_questions`, `toast.quiz_error`, `btn.generating_quiz`
+- `.claude/` in `.gitignore`
+
 ## 0.3.1 (2026-04-16)
 
 ### Added

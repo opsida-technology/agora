@@ -123,11 +123,15 @@ const COLORS = new Proxy({}, {
     return map[prop] ? cssVar(map[prop]) : '';
   }
 });
-// Agent color palette (for dynamic assignment)
-const AGENT_COLORS = () => [
-  cssVar('--primary'), cssVar('--emerald'), cssVar('--cyan'),
-  cssVar('--purple'), cssVar('--orange'), cssVar('--warning'),
-];
+// Agent color palette (computed at access time via Proxy)
+const AGENT_COLORS = new Proxy([], {
+  get(_, prop) {
+    const list = [COLORS.primary, COLORS.emerald, COLORS.cyan,
+                  COLORS.purple, COLORS.orange, COLORS.warning,
+                  COLORS.danger, COLORS.success];
+    return list[prop];
+  }
+});
 
 /* ── Markdown renderer (safe) ───────────────────── */
 function md(text) {

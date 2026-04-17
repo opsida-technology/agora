@@ -148,7 +148,7 @@
   <div id="panels"></div>
 </div>
 <script>
-const dir = window.location.pathname.split('/history/')[1];
+const dir = decodeURIComponent(window.location.pathname.split('/history/')[1]);
 
 function toast(msg) { showToast(msg, 'info'); }
 

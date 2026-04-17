@@ -387,34 +387,54 @@ function closeStartModal() { document.getElementById('startModal').classList.rem
 
 async function confirmStart() {
   if (!pickerSelected) return;
+  const selectedFile = pickerSelected;
   closeStartModal();
-  pendingDebateFile = pickerSelected;
+  pendingDebateFile = selectedFile;
 
-  // Load config text for quiz check
-  const res = await fetch('/api/config?file=' + encodeURIComponent(pickerSelected));
-  const text = await res.text();
+  const startBtn = document.getElementById('startBtn');
 
+  // Check if config has enough context for quiz
+  let hasContext = false;
   try {
+    const res = await fetch('/api/config?file=' + encodeURIComponent(selectedFile));
+    const text = await res.text();
     const parseRes = await fetch('/api/parse-yaml', { method: 'POST', headers: {'Content-Type': 'text/plain'}, body: text });
     const cfg = await parseRes.json();
-    if (cfg.context && cfg.context.trim().length > 50) {
-      const startBtn = document.getElementById('startBtn');
+    hasContext = cfg.context && cfg.context.trim().length > 50;
+  } catch(e) {}
+
+  if (hasContext) {
+    // Ask: quiz or direct start?
+    const doQuiz = confirm(t('msg.quiz_confirm'));
+    if (doQuiz) {
       startBtn.disabled = true;
-      startBtn.textContent = t('toast.generating_quiz');
-      toast(t('toast.preparing_quiz'));
+      startBtn.innerHTML = '<span class="spinner"></span> ' + t('btn.generating_quiz');
+      showToast(t('toast.quiz_wait'), 'info');
       try {
+        const res = await fetch('/api/config?file=' + encodeURIComponent(selectedFile));
+        const text = await res.text();
+        const parseRes = await fetch('/api/parse-yaml', { method: 'POST', headers: {'Content-Type': 'text/plain'}, body: text });
+        const cfg = await parseRes.json();
         const qRes = await fetch('/api/quiz', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({context: cfg.context, topic: cfg.topic, action: 'generate'})
         });
         const qData = await qRes.json();
         startBtn.disabled = false; startBtn.textContent = t('btn.start_debate');
-        if (qData.questions && qData.questions.length > 0) { renderQuiz(qData.questions); return; }
-      } catch(qe) { startBtn.disabled = false; startBtn.textContent = t('btn.start_debate'); }
+        if (qData.questions && qData.questions.length > 0) {
+          renderQuiz(qData.questions);
+          return;
+        }
+        showToast(t('toast.quiz_no_questions'), 'warning');
+      } catch(qe) {
+        startBtn.disabled = false; startBtn.textContent = t('btn.start_debate');
+        showToast(t('toast.quiz_error'), 'warning');
+      }
     }
-  } catch(e) {}
+  }
 
-  launchDebate(pickerSelected);
+  // Start debate directly
+  launchDebate(pendingDebateFile);
 }
 
 // ── Config Editor Modal ──

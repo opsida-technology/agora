@@ -79,10 +79,13 @@
 
   /* ── Timeline (left rail) ─────────────────────── */
   .timeline {
-    width: 40px; flex-shrink: 0; position: relative;
+    width: 40px; flex-shrink: 0; position: sticky; top: 0;
+    align-self: flex-start; max-height: 100vh; overflow-y: auto;
     display: flex; flex-direction: column; align-items: center;
-    padding-top: 8px;
+    padding-top: 8px; z-index: 5;
+    scrollbar-width: none;
   }
+  .timeline::-webkit-scrollbar { display: none; }
   .timeline-line {
     position: absolute; top: 0; bottom: 0; left: 50%; width: 2px;
     background: var(--border); transform: translateX(-50%);
@@ -214,7 +217,7 @@
   }
   .turn-wrap.pos-left .turn { border-radius: 4px 16px 16px 16px; }
   .turn-wrap.pos-right .turn { border-radius: 16px 4px 16px 16px; border-left: none; border-right: 4px solid transparent; }
-  .turn-wrap.pos-center .turn { border-radius: 16px; background: #1e293b; }
+  .turn-wrap.pos-center .turn { border-radius: 16px; background: var(--bg-mid); }
 
   .turn.active {
     box-shadow: 0 0 20px var(--primary-glow), 0 0 40px var(--primary-glow);
@@ -243,7 +246,7 @@
   .turn-wrap.pos-right .turn.intent-yield { border-right-color: var(--dim); }
 
   /* Addressed-to-specific slightly lighter bg */
-  .turn.addr-specific { background: #243447; }
+  .turn.addr-specific { background: var(--bg-mid); }
 
   .turn-header {
     display: flex; align-items: center; gap: 8px;
@@ -514,7 +517,7 @@
   @media (max-width: 900px) {
     .chart-pane { display: none !important; }
     .chart-mobile-toggle { display: block; }
-    .debate-pane { padding: 12px 8px; }
+    .debate-pane { padding: 12px 8px 90px; }
     .turn-wrap { max-width: 95%; }
     .turn-wrap.pos-left, .turn-wrap.pos-right { max-width: 95%; }
     .turn-wrap.pos-center { max-width: 98%; }
@@ -542,7 +545,7 @@
     .top-bar { padding: 6px 8px; }
     .back-link { font-size: 11px; padding: 4px 8px; }
     .ctrl-btn { padding: 4px 10px; font-size: 11px; }
-    .debate-pane { padding: 6px 2px; }
+    .debate-pane { padding: 6px 2px 90px; }
     .turns-col { padding-left: 6px; gap: 10px; }
     /* Hide timeline on small phones — replaced by progress chip */
     .timeline { display: none; }
@@ -697,7 +700,7 @@ debatePane.addEventListener('scroll', () => {
   userScrolledUp = !atBottom;
 });
 
-const AGENT_COLORS = [COLORS.primary,COLORS.emerald,COLORS.cyan,COLORS.purple,COLORS.orange,COLORS.warning,COLORS.danger,COLORS.success];
+// AGENT_COLORS is provided by /static/base.js (proxy that resolves CSS vars)
 
 const INTENT_COLORS = {
   propose: COLORS.primary, critique: COLORS.danger, defend: COLORS.orange,
@@ -957,30 +960,29 @@ function getTurnPosition(agentName, addressed) {
   return (idx % 2 === 0) ? 'pos-left' : 'pos-right';
 }
 
-// ── Initial status check ────────────────────────
-// If no debate is running and no replay data, show a helpful message
+// ── SSE — connect immediately, listeners attached below ──
+let _gotEvent = false;
+const source = new EventSource('/events');
+source.onopen = () => console.log('[Agora] SSE connected');
+source.onerror = () => {};
+
+// Initial status check — show helper if no debate running after 5s
 (async () => {
-  try {
-    const res = await fetch('/api/status');
-    const st = await res.json();
-    if (!st.running) {
-      // Wait a moment — debate may be starting (e.g. from continue)
-      await new Promise(r => setTimeout(r, 2000));
-      const res2 = await fetch('/api/status');
-      const st2 = await res2.json();
-      if (!st2.running) {
-        const el = $('#status');
-        el.innerHTML = t('status.no_debate') + ' <a href="/" style="color:var(--accent);text-decoration:underline;">' + t('status.go_dashboard') + '</a> to start one.';
+  await new Promise(r => setTimeout(r, 5000));
+  if (!_gotEvent) {
+    try {
+      const st = await (await fetch('/api/status')).json();
+      if (!st.running) {
+        $('#status').innerHTML = 'No debate running. <a href="/" style="color:var(--accent);text-decoration:underline;">Go to Dashboard</a>';
       }
-    }
-  } catch(e) {}
+    } catch(e) {}
+  }
 })();
 
-// ── SSE ─────────────────────────────────────────
-const es = new EventSource('/events');
-es.onerror = () => {};
+{ // wrap listeners in block
 
-es.addEventListener('header', e => {
+source.addEventListener('header', e => {
+  _gotEvent = true;
   const d = JSON.parse(e.data);
   $('#header').style.display = 'block';
   $('#topic').textContent = d.topic;
@@ -1011,13 +1013,14 @@ es.addEventListener('header', e => {
   document.getElementById('turnProgress').style.display = '';
 });
 
-es.addEventListener('status', e => {
+source.addEventListener('status', e => {
+  _gotEvent = true;
   const d = JSON.parse(e.data);
   $('#status').innerHTML = `<span class="spinner"></span>${d.text}`;
   $('#status').style.display = 'block';
 });
 
-es.addEventListener('turn_start', e => {
+source.addEventListener('turn_start', e => {
   const d = JSON.parse(e.data);
   $('#status').style.display = 'none';
   turnCounter++;
@@ -1065,14 +1068,14 @@ es.addEventListener('turn_start', e => {
   autoScroll(wrap);
 });
 
-es.addEventListener('token', e => {
+source.addEventListener('token', e => {
   if (!currentContentEl) return;
   const d = JSON.parse(e.data);
   currentContentEl.appendChild(document.createTextNode(d.text));
   autoScroll(currentTurnWrap || currentTurnEl);
 });
 
-es.addEventListener('turn_end', e => {
+source.addEventListener('turn_end', e => {
   const d = JSON.parse(e.data);
   if (!currentTurnEl) return;
   currentTurnEl.classList.remove('active');
@@ -1134,7 +1137,7 @@ es.addEventListener('turn_end', e => {
   currentTurnEl = null; currentContentEl = null; currentTurnWrap = null;
 });
 
-es.addEventListener('yield_notice', e => {
+source.addEventListener('yield_notice', e => {
   const d = JSON.parse(e.data);
   const div = document.createElement('div');
   div.className = 'system-notice yield';
@@ -1143,7 +1146,7 @@ es.addEventListener('yield_notice', e => {
   autoScroll(div);
 });
 
-es.addEventListener('summary', e => {
+source.addEventListener('summary', e => {
   const d = JSON.parse(e.data);
   const tbl = $('#summary-table');
   tbl.innerHTML = `<tr><th>${t('table.agent')}</th><th>${t('table.turns')}</th><th>${t('table.intents')}</th><th>${t('table.status')}</th></tr>`;
@@ -1156,12 +1159,12 @@ es.addEventListener('summary', e => {
   autoScroll($('#summary'));
 });
 
-es.addEventListener('decision_start', e => {
+source.addEventListener('decision_start', e => {
   $('#status').innerHTML = '<span class="spinner"></span>' + t('status.generating_decision');
   $('#status').style.display = 'block';
 });
 
-es.addEventListener('decision_token', e => {
+source.addEventListener('decision_token', e => {
   const overlay = document.getElementById('decisionOverlay');
   if (!overlay.classList.contains('visible')) {
     overlay.classList.add('visible');
@@ -1171,7 +1174,7 @@ es.addEventListener('decision_token', e => {
   $('#decision-content').appendChild(document.createTextNode(d.text));
 });
 
-es.addEventListener('decision_end', e => {
+source.addEventListener('decision_end', e => {
   const d = JSON.parse(e.data);
   $('#status').style.display = 'none';
   decisionReady = true;
@@ -1182,7 +1185,7 @@ es.addEventListener('decision_end', e => {
   document.getElementById('viewDecisionBtn').style.display = '';
 });
 
-es.addEventListener('done', e => {
+source.addEventListener('done', e => {
   const d = JSON.parse(e.data);
   $('#status').innerHTML = d.reason;
   $('#status').style.display = 'block';
@@ -1192,22 +1195,41 @@ es.addEventListener('done', e => {
   if (ib) { ib.classList.remove('visible', 'human-needed'); }
 });
 
-es.addEventListener('human_needed', e => {
+source.addEventListener('human_needed', e => {
   const d = JSON.parse(e.data);
   const bar = document.getElementById('interveneBar');
   if (bar) {
     bar.classList.add('visible', 'human-needed');
   }
+  // Extract the actual question from agent's content (last sentence with ? or @addressed:human context)
+  const content = d.question || '';
+  // Try to find the question — last sentence ending with ? or text after "@addressed: human"
+  let questionText = '';
+  const qMatch = content.match(/([^.!?\n]+\?)/g);
+  if (qMatch && qMatch.length) {
+    questionText = qMatch[qMatch.length - 1].trim();
+  } else {
+    // Fallback: last 200 chars of content
+    questionText = content.length > 200 ? '…' + content.slice(-200) : content;
+  }
   const notice = document.createElement('div');
   notice.className = 'system-notice human-needed';
-  notice.innerHTML = `<span class="notice-label">${t('debate.human_needed')}</span> ${t('debate.human_notice', {speaker: d.speaker})}`;
+  notice.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+      <span class="notice-label">${t('debate.human_needed')}</span>
+      <span style="color:var(--dim);font-size:11px;">— ${d.speaker} (Turn ${d.turn})</span>
+    </div>
+    <div style="font-size:13px;color:var(--text);line-height:1.5;padding:8px 12px;background:var(--bg);border-radius:6px;border-left:3px solid var(--orange);">
+      ${questionText}
+    </div>
+    <div style="font-size:11px;color:var(--dim);margin-top:6px;">${t('debate.human_notice', {speaker: d.speaker})}</div>`;
   $('#turns').appendChild(notice);
   autoScroll(notice);
   const input = document.getElementById('interveneInput');
   if (input) { input.focus(); input.placeholder = t('placeholder.intervene_human'); }
 });
 
-es.addEventListener('saved', e => {
+source.addEventListener('saved', e => {
   const d = JSON.parse(e.data);
   if (d.path) {
     const notice = document.createElement('div');
@@ -1232,7 +1254,7 @@ setInterval(async () => {
   } catch(e) {}
 }, 10000);
 
-es.addEventListener('moderator_msg', e => {
+source.addEventListener('moderator_msg', e => {
   const d = JSON.parse(e.data);
   // L1: Phase transitions get full-width divider
   if (d.content && d.content.startsWith('Phase ')) {
@@ -1252,6 +1274,7 @@ es.addEventListener('moderator_msg', e => {
   $('#turns').appendChild(div);
   autoScroll(div);
 });
+} // end _attachAllListeners
 
 let isPaused = false;
 async function togglePause() {
@@ -1291,8 +1314,6 @@ async function sendIntervention(e) {
     if (bar) bar.classList.remove('human-needed');
   }
 }
-
-es.onerror = () => { es.close(); };
 </script>
 </body>
 </html>

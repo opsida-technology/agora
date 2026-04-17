@@ -15,3 +15,4 @@ configs/*
 !configs/code_review.yaml
 !configs/startup_strategy.yaml
 !configs/tech_choice.yaml
+.claude/
