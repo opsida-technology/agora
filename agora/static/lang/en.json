@@ -144,6 +144,7 @@
   "toast.start_failed": "Failed to start",
   "toast.debate_stopped": "Debate stopped",
   "toast.debate_continued": "Debate continued",
+  "toast.debate_continued_turns": "Debate continued — moderator set {n} turns",
   "toast.nothing_save": "Nothing to save",
   "toast.nothing_copy": "Nothing to copy",
   "toast.generating_quiz": "Generating quiz...",

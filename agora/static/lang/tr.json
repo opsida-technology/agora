@@ -144,6 +144,7 @@
   "toast.start_failed": "Başlatma başarısız",
   "toast.debate_stopped": "Tartışma durduruldu",
   "toast.debate_continued": "Tartışma devam ediyor",
+  "toast.debate_continued_turns": "Tartışma devam ediyor — moderatör {n} tur belirledi",
   "toast.nothing_save": "Kaydedilecek bir şey yok",
   "toast.nothing_copy": "Kopyalanacak bir şey yok",
   "toast.generating_quiz": "Quiz oluşturuluyor...",

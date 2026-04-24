@@ -695,10 +695,42 @@ let turnCounter = 0;
 let decisionReady = false;
 
 const debatePane = document.getElementById('debatePane');
+let _newMessageCount = 0;
 debatePane.addEventListener('scroll', () => {
-  const atBottom = (debatePane.scrollHeight - debatePane.scrollTop - debatePane.clientHeight) < 80;
+  // Tight threshold (8px) — if user moved even slightly up, don't auto-scroll
+  const atBottom = (debatePane.scrollHeight - debatePane.scrollTop - debatePane.clientHeight) < 8;
   userScrolledUp = !atBottom;
-});
+  if (atBottom) {
+    _newMessageCount = 0;
+    const badge = document.getElementById('newMsgBadge');
+    if (badge) badge.style.display = 'none';
+  }
+}, {passive: true});
+
+// "Scroll to bottom" notification badge
+(function installBadge() {
+  if (document.getElementById('newMsgBadge')) return;
+  const b = document.createElement('button');
+  b.id = 'newMsgBadge';
+  b.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:50;padding:8px 16px;border-radius:9999px;background:var(--primary);color:#fff;border:none;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:none;';
+  b.textContent = '↓ Yeni mesajlar';
+  b.onclick = () => {
+    _newMessageCount = 0; userScrolledUp = false;
+    b.style.display = 'none';
+    debatePane.scrollTo({top: debatePane.scrollHeight, behavior: 'smooth'});
+  };
+  document.body.appendChild(b);
+})();
+
+function notifyNewMessage() {
+  if (!userScrolledUp) return;
+  _newMessageCount++;
+  const b = document.getElementById('newMsgBadge');
+  if (b) {
+    b.textContent = `↓ ${_newMessageCount} yeni mesaj`;
+    b.style.display = 'block';
+  }
+}
 
 // AGENT_COLORS is provided by /static/base.js (proxy that resolves CSS vars)
 
@@ -861,7 +893,11 @@ function toggleTurn(el) {
 
 const MAX_VISIBLE_TURNS = 60;
 function autoScroll(el) {
-  if (!userScrolledUp) el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  if (!userScrolledUp) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  } else {
+    notifyNewMessage();
+  }
   // DOM performance: collapse old turns when too many
   const turns = document.getElementById('turns');
   if (turns) {
@@ -1193,6 +1229,42 @@ source.addEventListener('done', e => {
   if (sb) sb.style.display = 'none';
   const ib = document.getElementById('interveneBar');
   if (ib) { ib.classList.remove('visible', 'human-needed'); }
+});
+
+source.addEventListener('human_batch_needed', e => {
+  _gotEvent = true;
+  const d = JSON.parse(e.data);
+  const questions = d.questions || [];
+  const bar = document.getElementById('interveneBar');
+  if (bar) bar.classList.add('visible', 'human-needed');
+  const notice = document.createElement('div');
+  notice.className = 'system-notice human-needed';
+  const items = questions.map(q => {
+    const content = q.content || '';
+    const qMatch = content.match(/([^.!?\n]+\?)/g);
+    let questionText = qMatch && qMatch.length
+      ? qMatch[qMatch.length - 1].trim()
+      : (content.length > 200 ? '…' + content.slice(-200) : content);
+    return `<div style="margin:8px 0;padding:10px 12px;background:var(--bg);border-radius:6px;border-left:3px solid var(--orange);">
+      <div style="font-size:11px;color:var(--dim);margin-bottom:4px;">${q.speaker} (Turn ${q.turn})</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.5;">${questionText}</div>
+    </div>`;
+  }).join('');
+  notice.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+      <span class="notice-label" style="color:var(--orange);font-weight:700;">İNSANA TOPLU SORULAR (${questions.length})</span>
+      <span style="color:var(--dim);font-size:11px;">— Debate bitti, kapanış öncesi yanıt</span>
+    </div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:8px;">Tüm soruları tek seferde yanıtla. 10 dakika içinde yanıt gelmezse otomatik devam eder.</div>
+    ${items}
+    <div style="font-size:11px;color:var(--dim);margin-top:8px;">Yanıtını alttaki Send kutusuna yaz — agentlar final değerlendirmelerinde kullanacak.</div>`;
+  $('#turns').appendChild(notice);
+  autoScroll(notice);
+  const input = document.getElementById('interveneInput');
+  if (input) {
+    input.focus();
+    input.placeholder = `Tüm sorulara birlikte yanıt ver (${questions.length} soru)…`;
+  }
 });
 
 source.addEventListener('human_needed', e => {

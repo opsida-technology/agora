@@ -53,10 +53,10 @@
   }
   .decision-collapse.open .arrow { transform: rotate(180deg); }
   .decision-body {
-    max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
+    max-height: 0; overflow: hidden; transition: max-height 0.6s ease;
   }
   .decision-collapse.open .decision-body {
-    max-height: 5000px;
+    max-height: 50000px; /* effectively unlimited */
   }
   .decision-body-inner { padding: 20px 24px; }
 
@@ -186,11 +186,13 @@ async function load() {
     if (dRes.ok) {
       hasDecision = true;
       const dText = await dRes.text();
+      window._decisionMd = dText; // store for copy
       document.getElementById('decisionHighlight').innerHTML = `
         <div class="decision-collapse" id="decisionCollapse">
-          <div class="decision-toggle" onclick="toggleDecision()">
-            <h2>${t('section.decision_summary')}</h2>
-            <span class="arrow">&#x25BC;</span>
+          <div class="decision-toggle">
+            <h2 onclick="toggleDecision()" style="flex:1;cursor:pointer;">${t('section.decision_summary')}</h2>
+            <button class="btn" onclick="copyDecision(event)" style="font-size:11px;padding:4px 10px;min-height:auto;margin-right:8px;" title="Copy as Markdown">Copy MD</button>
+            <span class="arrow" onclick="toggleDecision()" style="cursor:pointer;">&#x25BC;</span>
           </div>
           <div class="decision-body">
             <div class="decision-body-inner content">${md(dText)}</div>
@@ -254,6 +256,26 @@ function toggleDecision() {
   document.getElementById('decisionCollapse').classList.toggle('open');
 }
 
+async function copyDecision(e) {
+  e.stopPropagation();
+  const text = window._decisionMd || '';
+  if (!text) { showToast('No decision to copy', 'warning'); return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('Decision copied as Markdown', 'success');
+  } catch(err) {
+    // Fallback for older browsers / non-https
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); showToast('Decision copied', 'success'); }
+    catch(_) { showToast('Copy failed — select manually', 'error'); }
+    document.body.removeChild(ta);
+  }
+}
+
 function showTab(id) {
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -285,7 +307,7 @@ async function doLaunchContinue() {
   try {
     const res = await fetch('/api/continue', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({debate_dir: dir, message: msg, turns: 6})
+      body: JSON.stringify({debate_dir: dir, message: msg})
     });
     const result = await res.json();
     if (result.ok) { window.location.href = '/debate'; }

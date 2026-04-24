@@ -180,12 +180,13 @@ class APIBackend(Backend):
 
     def __init__(self, model: str, base_url: str = "http://localhost:8000/v1",
                  api_key: str = "none", max_tokens: int = 400,
-                 temperature: float = 0.8):
+                 temperature: float = 0.8, timeout: int = 300):
         self.model_id = model
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self.timeout = timeout
 
     def _endpoint(self) -> str:
         return f"{self.base_url}/chat/completions"
@@ -195,6 +196,49 @@ class APIBackend(Backend):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
         }
+
+    def _list_models(self) -> list[str]:
+        """Best-effort fetch of available model IDs from /v1/models."""
+        try:
+            req = urllib.request.Request(
+                f"{self.base_url}/models", headers=self._headers())
+            data = json.loads(urllib.request.urlopen(req, timeout=5).read())
+            return [m.get("id", "") for m in data.get("data", []) if m.get("id")]
+        except Exception:
+            return []
+
+    def _format_error(self, exc: Exception) -> str:
+        """Build a useful error message — server response body + suggested
+        models on 404 — so users can fix model-id typos without guessing."""
+        from urllib.error import HTTPError, URLError
+        if isinstance(exc, HTTPError):
+            try:
+                body = exc.read().decode("utf-8", errors="replace")
+                detail = body.strip()
+                try:
+                    j = json.loads(body)
+                    detail = (j.get("error", {}).get("message")
+                              or j.get("message") or detail)
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+            except Exception:
+                detail = str(exc)
+            msg = f"HTTP {exc.code} from {self._endpoint()}: {detail}"
+            if exc.code == 404 or "model" in detail.lower():
+                models = self._list_models()
+                if models:
+                    msg += (f"\nAvailable models on {self.base_url}: "
+                            + ", ".join(models)
+                            + f"\nYou requested: '{self.model_id}'")
+                else:
+                    msg += (f"\nCould not list models from {self.base_url}/models — "
+                            "is the server running?")
+            return msg
+        if isinstance(exc, URLError):
+            return (f"Cannot reach {self.base_url} ({exc.reason}). "
+                    "Is the server running? "
+                    "(LM Studio: Developer → Start Server)")
+        return f"{type(exc).__name__}: {exc}"
 
     def generate(self, system, topic, history, self_name) -> str:
         msgs = build_chat_messages(system, topic, history, self_name)
@@ -208,10 +252,22 @@ class APIBackend(Backend):
         req = urllib.request.Request(
             self._endpoint(), data=body, headers=self._headers())
         try:
-            resp = json.loads(urllib.request.urlopen(req, timeout=300).read())
-            return resp["choices"][0]["message"]["content"].strip()
+            resp = json.loads(urllib.request.urlopen(req, timeout=self.timeout).read())
+            choice = resp["choices"][0]
+            content = (choice["message"].get("content") or "").strip()
+            if not content:
+                # Reasoning models (gemma-4, qwen3.5) put their chain-of-thought
+                # in a separate field and only fill `content` after they finish
+                # thinking. If the budget runs out mid-thought, content is empty.
+                reasoning = choice["message"].get("reasoning_content", "")
+                if reasoning and choice.get("finish_reason") == "length":
+                    return (f"[ERROR API]: model '{self.model_id}' exhausted "
+                            f"max_tokens={self.max_tokens} on internal reasoning "
+                            "before producing a reply. Increase max_tokens "
+                            "(try 2000+) or pick a non-reasoning model.")
+            return content
         except Exception as e:
-            return f"[ERROR API]: {e}"
+            return f"[ERROR API]: {self._format_error(e)}"
 
     def stream(self, system, topic, history, self_name) -> Iterator[str]:
         msgs = build_chat_messages(system, topic, history, self_name)
@@ -225,7 +281,7 @@ class APIBackend(Backend):
         req = urllib.request.Request(
             self._endpoint(), data=body, headers=self._headers())
         try:
-            resp = urllib.request.urlopen(req, timeout=300)
+            resp = urllib.request.urlopen(req, timeout=self.timeout)
             for raw_line in resp:
                 line = raw_line.decode("utf-8", errors="replace").strip()
                 if not line:
@@ -243,7 +299,7 @@ class APIBackend(Backend):
                 except (json.JSONDecodeError, KeyError, IndexError):
                     continue
         except Exception as e:
-            yield f"[ERROR API]: {e}"
+            yield f"[ERROR API]: {self._format_error(e)}"
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────

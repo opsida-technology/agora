@@ -1,0 +1,62 @@
+# lmstudio_dual.yaml — Local debate via LM Studio (3 agents, 2 models)
+# Showcases: API backend, proposer/critic/synthesizer pattern
+#
+# Setup:
+#   1. LM Studio → Developer → Start Server (default port 1234)
+#   2. Load these models (or edit `model:` fields below to match yours):
+#        - google/gemma-4-e4b
+#        - qwen/qwen3.5-9b
+#   3. Verify with: curl http://localhost:1234/v1/models
+
+topic: |
+  A platform development for agentic AI deployment service.
+context: |
+  Context for the proposal:
+  - Goal: Build a self-hosted agentic orchestration layer.
+  - Constraints: Must reduce cloud dependency and data leakage.
+  - Technical stack: Python, FastAPI, Docker.
+  - Risk profile: High novelty requires rigorous security review.
+max_turns: 18 # Artırıldı, daha derin bir tartışma için
+language: Turkish
+memory_mode: co-resident
+anti_consensus: true # Anti-konsens mekanizmasını aktif etmek iyi bir fikirdir
+
+agents:
+  # --- Proposer (Savunan) ---
+  - name: proposer
+    backend: api
+    model: qwen/qwen3.5-9b
+    base_url: http://localhost:1234/v1
+    api_key: lm-studio
+    timeout: 180
+    max_tokens: 4000  # qwen3.5/gemma-4 are reasoning models — internal thinking is variable, 2000+ is safe
+    temperature: 0.9
+    system: |
+      Sen, bu platform geliştirme önerisinin (self-hosted agentic orchestration layer) en büyük savunucususun. Bu sistemi hayata geçirmek için somut teknik kanıtlar, iş planı ve adım adım uygulamaya yönelik adımlar sunarak bir tez oluşturmalısın. Kritik eleştirilere karşı dururken, daima "Bu neden önemlidir?" sorusuyla pozitif açılardan cevap ver. Her turda 5-7 cümle kullan.
+      @intent: propose # İlk niyetimizi belirtmek iyi olur
+
+  # --- Critic (Eleştiren) ---
+  - name: critic
+    backend: api
+    model: google/gemma-4-e4b
+    base_url: http://localhost:1234/v1
+    api_key: lm-studio
+    timeout: 180
+    max_tokens: 4000  # qwen3.5/gemma-4 are reasoning models — internal thinking is variable, 2000+ is safe
+    temperature: 0.6 # Biraz daha yapıcı ama şüpheci kalsın
+    system: |
+      Sen, önerilen sistemin potansiyel zayıflıklarını, atlanmış riskleri ve varsayımları bulmakla görevlisin. Her turda, bir önceki konuşmada geçen veya bağlamdan çıkarabileceğin *en az bir* somut açığı işaret et. Eleştirinde mutlaka "Bu varsayım tehlikeli olabilir çünkü..." kalıbını kullan. Odak noktan: Güvenlik Açıkları (Security), Ölçeklenebilirlik (Scalability) ve Verimlilik/Maliyet (Efficiency/Cost). 5-7 cümle kullan.
+      @intent: critique
+
+  # --- Synthesizer (Sentezleyici / Arabulucu) ---
+  - name: synthesizer
+    backend: api
+    model: qwen/qwen3.5-9b # Proposer ile aynı modeli kullanabilir veya farklı bir model eklenebilir
+    base_url: http://localhost:1234/v1
+    api_key: lm-studio
+    timeout: 180
+    max_tokens: 4000  # qwen3.5/gemma-4 are reasoning models — internal thinking is variable, 2000+ is safe
+    temperature: 0.7 # Dengeli ve çözüm odaklı olsun
+    system: |
+      Sen, tartışmanın gidişatını yöneten arabulucusun. Proposer'ın güçlü yönleri ile Critic'in haklı bulduğu riskler arasında köprü kurmakla görevlisin. Her turda: (1) Şu ana kadar üzerinde uzlaşılan noktayı bir cümleyle özetle, (2) Hâlâ açık olan en kritik anlaşmazlığı tek cümlede netleştir, (3) Somut bir orta yol veya bir sonraki tartışılması gereken alt soruyu öner. Tarafsız kal, ama gerektiğinde Proposer'ı veya Critic'i adıyla çağırarak (`@addressed: proposer` ya da `@addressed: critic`) sıradaki turu yönlendir. 4-6 cümle kullan.
+      @intent: synthesize

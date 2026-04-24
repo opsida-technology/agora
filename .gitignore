@@ -12,6 +12,7 @@ configs/*
 !configs/hybrid.yaml
 !configs/mlx_offline.yaml
 !configs/ollama_local.yaml
+!configs/lmstudio_dual.yaml
 !configs/code_review.yaml
 !configs/startup_strategy.yaml
 !configs/tech_choice.yaml

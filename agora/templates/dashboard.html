@@ -723,10 +723,10 @@ async function submitQuiz() {
   if (window._continueMode && window._continueDir) {
     const answerText = answers.map(a => `Q: ${a.question}\nA: ${a.answer}`).join('\n\n');
     const res = await fetch('/api/continue', { method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({debate_dir: window._continueDir, message: answerText, turns: 6}) });
+      body: JSON.stringify({debate_dir: window._continueDir, message: answerText}) });
     const result = await res.json();
     window._continueMode = false;
-    if (result.ok) { toast(t('toast.debate_continued')); window.location.href = '/debate'; }
+    if (result.ok) { toast(result.turns ? t('toast.debate_continued_turns', {n: result.turns}) : t('toast.debate_continued')); window.location.href = '/debate'; }
     else { toast(result.error || t('toast.start_failed'), 'var(--red)'); }
   } else {
     launchDebate(pendingDebateFile);
@@ -739,7 +739,7 @@ function skipQuiz() {
     window._continueMode = false;
     const msg = prompt(t('msg.continue_direction')) || t('msg.continue_default');
     fetch('/api/continue', { method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({debate_dir: window._continueDir, message: msg, turns: 6}) })
+      body: JSON.stringify({debate_dir: window._continueDir, message: msg}) })
       .then(r => r.json()).then(result => { if (result.ok) { toast('Debate continued'); window.location.href = '/debate'; } });
   } else {
     launchDebate(pendingDebateFile);

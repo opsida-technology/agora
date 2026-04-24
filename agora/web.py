@@ -33,6 +33,39 @@ from .health import run_health
 log = logging.getLogger("agora")
 
 
+# ── Continue-turns suggestion ─────────────────────────────────────────
+
+def _suggest_turns(topic: str, context: str, message: str,
+                   min_turns: int = 2, max_turns: int = 30,
+                   default: int = 6) -> int:
+    """Ask a lightweight LLM moderator how many extra turns this
+    continuation warrants. Returns a bounded integer; falls back to
+    *default* on any failure."""
+    prompt = (
+        "You are a neutral debate moderator deciding how many additional "
+        "turns a multi-agent debate needs to address new input.\n\n"
+        f"Original topic:\n{topic}\n\n"
+        f"Original context (excerpt):\n{(context or '')[:1500]}\n\n"
+        f"New input from user:\n{message}\n\n"
+        f"Reply with a SINGLE integer between {min_turns} and {max_turns} "
+        "representing the recommended number of extra debate turns. "
+        "Simple follow-up questions need fewer turns; broad new directions "
+        "need more. Output the number only, no explanation."
+    )
+    try:
+        backend = CLIBackend(command=["claude", "-p"], timeout=30)
+        raw = backend.generate("You output one integer only.",
+                               prompt, [], "turn-planner")
+        m = re.search(r"\d+", raw or "")
+        if not m:
+            return default
+        n = int(m.group())
+        return max(min_turns, min(max_turns, n))
+    except Exception as e:
+        log.warning(f"turn suggestion failed: {e}")
+        return default
+
+
 # ── Template loading ──────────────────────────────────────────────────
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -325,6 +358,7 @@ class DebateServer(ThreadingHTTPServer):
         turns_used: dict[str, int] = {a.name: 0 for a in agents}
 
         history, turn, last_msg = [], 0, None
+        queued_human_questions: list[dict] = []  # batched until end of debate
         rr_idx = 0
         last_phase_num = 0
         round_turn_count = 0
@@ -517,13 +551,16 @@ class DebateServer(ThreadingHTTPServer):
                         f"{target_name}, can you identify what is being "
                         f"left unexamined? What assumption is the group "
                         f"making that might be wrong?")
-                    history.append(Message(
+                    mod_msg = Message(
                         speaker="moderator", turn=turn,
                         content=mod_content,
                         intent="question", addressed=target_name,
-                        next_action="continue"))
+                        next_action="continue")
+                    history.append(mod_msg)
                     bus.publish("moderator_msg", {"turn": turn, "content": mod_content})
                     consensus_streak = 0
+                    # Force next speaker to be the moderator's addressee
+                    last_msg = mod_msg
 
             # Moderator convergence check
             if not is_fail:
@@ -560,27 +597,17 @@ class DebateServer(ThreadingHTTPServer):
                         except Exception:
                             pass
 
-            # Human-in-the-loop
+            # Human-in-the-loop — queue questions for end-of-debate batch
             if (msg.addressed == "human" or msg.invited == "human"
                     or msg.next_action == "invite:human"):
-                bus.publish("human_needed", {
-                    "turn": turn, "speaker": msg.speaker,
-                    "question": msg.content,
+                # Extract the question from msg content
+                queued_human_questions.append({
+                    "turn": turn, "speaker": msg.speaker, "content": msg.content,
                 })
-                self.human_response.clear()
-                while not self.human_response.is_set() and not self.debate_stop.is_set():
-                    if not self.moderator_queue.empty():
-                        human_msg = self.moderator_queue.get()
-                        history.append(Message(
-                            speaker="human", turn=turn,
-                            content=human_msg,
-                            intent="propose", addressed=msg.speaker,
-                            next_action="continue"))
-                        bus.publish("moderator_msg", {
-                            "turn": turn, "content": f"[Human] {human_msg}"})
-                        self.human_response.set()
-                        break
-                    self.human_response.wait(timeout=2)
+                bus.publish("moderator_msg", {
+                    "turn": turn,
+                    "content": f"[{msg.speaker}] insana soru kuyruğa eklendi (debate sonunda toplu sorulacak)"
+                })
 
             if speaker.yielded:
                 remaining = [a.name for a in agents if not a.yielded]
@@ -620,6 +647,79 @@ class DebateServer(ThreadingHTTPServer):
                 pass
             return
 
+        # ── End-of-debate: batched human Q&A ──
+        if queued_human_questions:
+            bus.publish("moderator_msg", {
+                "turn": turn,
+                "content": f"[Moderatör] Debate bitti. {len(queued_human_questions)} agent insandan girdi istedi. Sorular toplu sunuluyor."
+            })
+            bus.publish("human_batch_needed", {
+                "questions": queued_human_questions,
+            })
+            self.human_response.clear()
+            # Wait up to 10 minutes for batched answer (single message via /api/intervene)
+            timeout_seconds = 600
+            waited = 0
+            while not self.human_response.is_set() and not self.debate_stop.is_set():
+                if not self.moderator_queue.empty():
+                    human_answer = self.moderator_queue.get()
+                    history.append(Message(
+                        speaker="human", turn=turn,
+                        content=human_answer,
+                        intent="propose", addressed="all",
+                        next_action="continue"))
+                    bus.publish("moderator_msg", {
+                        "turn": turn, "content": f"[Human batch answer] {human_answer}"
+                    })
+                    self.human_response.set()
+                    break
+                self.human_response.wait(timeout=2)
+                waited += 2
+                if waited >= timeout_seconds:
+                    bus.publish("moderator_msg", {
+                        "turn": turn,
+                        "content": "[Moderatör] 10 dakika doldu, otomatik devam ediliyor."
+                    })
+                    history.append(Message(
+                        speaker="moderator", turn=turn,
+                        content="[Human input timeout — 10dk aşıldı, kapanış değerlendirmelerine geçildi]",
+                        intent="question", addressed="all",
+                        next_action="continue"))
+                    break
+
+        # ── Final closing round: every agent (including yielded) speaks once ──
+        bus.publish("moderator_msg", {
+            "turn": turn,
+            "content": f"[Moderatör] Final kapanış turu — yield etmiş olanlar dahil her agent son değerlendirmesini yapacak."
+        })
+        for a in agents:
+            if self.debate_stop.is_set():
+                break
+            turn += 1
+            bus.publish("turn_start", {"turn": turn, "name": a.name, "closing": True})
+            close_history = history + [Message(
+                speaker="moderator", turn=turn,
+                content=("FINAL KAPANIŞ. Bu senin son sözün. Tartışma boyunca öğrendiklerin "
+                         "ve insanın verdiği yanıtlar ışığında: pozisyonunu güncelle, en kritik "
+                         "endişeni belirt, ve kararla ilgili son tavsiyeni 4-6 cümleyle ver. "
+                         "Yield etmiş olsan bile bu kapanış için yeniden konuşuyorsun."),
+                intent="question", addressed=a.name,
+                next_action="continue")]
+            try:
+                msg = a.speak(topic, close_history, turn, on_token=on_token)
+                bus.publish("turn_end", {
+                    "turn": turn, "name": msg.speaker, "closing": True,
+                    "intent": msg.intent, "addressed": msg.addressed,
+                    "next_action": msg.next_action, "content": msg.content,
+                    "yielded": True, "invited": msg.invited,
+                })
+                history.append(msg)
+            except Exception as e:
+                bus.publish("moderator_msg", {
+                    "turn": turn,
+                    "content": f"[{a.name} kapanış konuşamadı: {e}]"
+                })
+
         # Stats
         stats = [{"name": a.name, "turns": a.stats["turns"],
                   "intents": a.stats["intents"], "yielded": a.yielded}
@@ -628,28 +728,59 @@ class DebateServer(ThreadingHTTPServer):
 
         # Decision summary — fresh backend
         bus.publish("decision_start", {})
+        base_rules = (
+            "You are a senior editor writing the FINAL DECISION DOCUMENT after a "
+            "structured multi-agent debate. This is the ONLY artifact that will be "
+            "read after the debate ends — it must stand alone.\n\n"
+            "HARD RULES:\n"
+            "1. Do NOT continue the debate, do NOT address agents, do NOT use Agora directives.\n"
+            "2. Every claim must be TRACEABLE to what agents actually said. No hallucination.\n"
+            "3. Prefer CONCRETE over vague: names, numbers, versions, thresholds, dates.\n"
+            "4. If agents disagreed, say so explicitly — do NOT manufacture false consensus.\n"
+            "5. If something was RULED OUT, say what and why (one sentence each).\n"
+            "6. The CLOSING ROUND (final per-agent statements) carries the MOST weight — "
+            "their updated positions override earlier claims.\n"
+            "7. Use structured Markdown: headings, tables for comparisons, bullets for lists.\n"
+            "8. No filler. No 'in summary', no 'it is important to note', no restating the topic.\n"
+            "9. Every agent must appear by NAME at least once when describing their contribution.\n"
+            f"10. Write in {language}. Keep sentences short and dense.\n"
+        )
         if final_contract:
             decision_system = (
-                "You are a neutral moderator writing the final decision summary. "
-                "You must NOT continue the debate or address agents. "
-                "Do NOT use Agora directives.\n\n"
-                "The debate organizer specified this output contract:\n"
+                base_rules + "\n\n"
+                "OUTPUT CONTRACT (follow section by section, do not skip, do not reorder):\n"
                 f"{final_contract}\n\n"
-                "Write the decision document following that contract exactly. "
-                f"Be concise and specific. Write in {language}.")
+                "If a section has insufficient evidence from the debate, write "
+                "'[Veri yetersiz — tartışmada ele alınmadı]' rather than inventing content."
+            )
         else:
             decision_system = (
-                "You are a neutral moderator writing the final decision summary. "
-                "You must NOT continue the debate or address agents. "
-                "Write ONLY a structured decision document with these sections:\n\n"
-                "## Agreed Points\nBullet list of what the group converged on.\n\n"
-                "## Open Disagreements\nBullet list of unresolved tensions.\n\n"
-                "## Recommended Next Steps\nNumbered list of concrete actions.\n\n"
-                "## Agent Contributions\nOne sentence per agent summarizing their key contribution.\n\n"
-                "Be concise and specific. Do NOT use Agora directives. "
-                f"Write in {language}.")
+                base_rules + "\n\n"
+                "OUTPUT STRUCTURE:\n\n"
+                "## Özet (Tek Paragraf)\n"
+                "3-5 cümle. Topic'i ve vardığı ana kararı ifade et. Kilit metrik/sayı varsa içinde geçsin.\n\n"
+                "## Kararlar\n"
+                "Numbered list. Her karar: **[KARAR]** — tek cümle gerekçe. "
+                "En az 3, en fazla 10 karar. En önemli en üstte.\n\n"
+                "## Uzlaşılan Noktalar\n"
+                "Bullet list. Tüm agent'ların hemfikir olduğu noktalar. Her bullet bir tam cümle.\n\n"
+                "## Açık Anlaşmazlıklar\n"
+                "| Konu | Taraf 1 (agent adı → pozisyon) | Taraf 2 (agent adı → pozisyon) | Kim haklı / çözüm yolu |\n"
+                "En az 1 satır (hiçbir debate %100 konsensüs değildir). Yoksa 'Açık anlaşmazlık kalmadı' yaz.\n\n"
+                "## Reddedilenler\n"
+                "Bullet list. Tartışmada masaya gelen ama reddedilen yaklaşımlar + reddedilme sebebi.\n\n"
+                "## Sonraki Adımlar\n"
+                "Numbered list. Her madde: **[Kim]** — [ne yapacak] — [ne zaman/hangi koşulda]. "
+                "Somut, actionable, ölçülebilir.\n\n"
+                "## Agent Katkıları\n"
+                "Her agent için tek satır: **agent-adı:** [o tartışmada getirdiği en kritik katkı, "
+                "pozisyon değişikliği, veya son değerlendirmesinden çıkan ana mesaj]. "
+                "Kapanış turunu mutlaka yansıt.\n\n"
+                "## Açık Kalan Sorular\n"
+                "Agent'ların insana sorduğu (ve henüz netleşmeyen) sorular + cevaplanması neden kritik."
+            )
 
-        decision_backend = CLIBackend(command=["claude", "-p"], timeout=180)
+        decision_backend = CLIBackend(command=["claude", "-p"], timeout=300)
         parts: list[str] = []
         for chunk in decision_backend.stream(
                 decision_system, topic, history, "moderator"):
@@ -1012,15 +1143,22 @@ class Handler(BaseHTTPRequestHandler):
         data = json.loads(body)
         cfg_dir = data.get("debate_dir", "")
         message = data.get("message", "")
-        extra_turns = data.get("turns", 6)
+        extra_turns = data.get("turns")  # None → moderator decides
         config_path = DEBATES_DIR / cfg_dir / "config.yaml"
         if not config_path.exists():
             self._json({"ok": False, "error": "Config not found in debate"})
-        elif self.server.debate_running():
+            return
+        if self.server.debate_running():
             self._json({"ok": False, "error": "A debate is already running"})
-        else:
-            ok = self.server.continue_debate(str(config_path), message, extra_turns)
-            self._json({"ok": ok})
+            return
+        if extra_turns is None:
+            with open(config_path) as f:
+                prev_cfg = yaml.safe_load(f) or {}
+            extra_turns = _suggest_turns(prev_cfg.get("topic", ""),
+                                         prev_cfg.get("context", ""),
+                                         message)
+        ok = self.server.continue_debate(str(config_path), message, extra_turns)
+        self._json({"ok": ok, "turns": extra_turns})
 
     def _post_quiz(self):
         body = self._read_body()

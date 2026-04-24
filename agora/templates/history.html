@@ -229,6 +229,20 @@
   <span data-t="msg.compare_instruction">Select two debates to compare.</span> <button class="btn" onclick="runCompare()" style="font-size:11px;padding:4px 12px;margin-left:8px;" id="runCompareBtn" disabled data-t="btn.compare_selected">Compare Selected</button>
   <button class="btn" onclick="toggleCompare()" style="font-size:11px;padding:4px 12px;margin-left:4px;" data-t="btn.cancel">Cancel</button>
 </div>
+<!-- Continue with custom context (paste file content or free text) -->
+<div id="continueContextModal" style="display:none;margin-bottom:16px;padding:20px;background:var(--surface);border:1px solid var(--success);border-radius:12px;">
+  <h3 style="color:var(--emerald);font-size:14px;margin-bottom:8px;">Continue with context</h3>
+  <p style="color:var(--dim);font-size:12px;margin-bottom:12px;">Paste markdown, progress notes, or new context. Agents will build on the previous decision.</p>
+  <textarea id="continueContextText" placeholder="Paste file content or describe what's new..." style="width:100%;min-height:240px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:'SF Mono',monospace;outline:none;resize:vertical;"></textarea>
+  <div style="display:flex;gap:10px;margin-top:12px;align-items:center;">
+    <label style="font-size:12px;color:var(--dim);">Extra turns:</label>
+    <input id="continueTurns" type="number" value="6" min="1" max="30" style="width:70px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+    <div style="flex:1;"></div>
+    <button class="btn" onclick="submitContinueContext()" style="border-color:var(--success);color:var(--success);">Continue Debate</button>
+    <button class="btn" onclick="document.getElementById('continueContextModal').style.display='none'" style="color:var(--dim);">Cancel</button>
+  </div>
+</div>
+
 <div id="continueQuiz" style="display:none;margin-bottom:16px;padding:20px;background:var(--surface);border:1px solid var(--success-bg);border-radius:12px;">
   <h3 style="color:var(--emerald);font-size:14px;margin-bottom:12px;" data-t="heading.followup_questions">Follow-up Questions</h3>
   <p style="color:var(--dim);font-size:12px;margin-bottom:16px;" data-t="msg.quiz_followup">Answer these to guide the next round of debate.</p>
@@ -358,13 +372,18 @@ function renderDebateList(items) {
       <div class="debate-list">`;
     items.forEach(d => {
       html += _renderDebateCard(d);
-      // Show continuations nested
-      const children = parentMap[d.dir] || [];
-      children.forEach(c => {
-        html += `<div style="margin-left:24px;border-left:2px solid var(--orange);padding-left:12px;">`;
-        html += _renderDebateCard(c);
-        html += `</div>`;
-      });
+      // Recursively render continuation chain (depth-first)
+      function renderChildren(parentDir, depth) {
+        const children = parentMap[parentDir] || [];
+        children.forEach(c => {
+          const indent = Math.min(depth, 3) * 16;
+          html += `<div style="margin-left:${indent}px;border-left:2px solid var(--orange);padding-left:12px;">`;
+          html += _renderDebateCard(c);
+          html += `</div>`;
+          renderChildren(c.dir, depth + 1);
+        });
+      }
+      renderChildren(d.dir, 1);
     });
     html += `</div></div>`;
   }
@@ -514,54 +533,8 @@ function exportPDF() {
 
 async function continueDebate() {
   if (!selectedDir) return;
-  const d = debates.find(x => x.dir === selectedDir);
-  if (!d) return;
-
-  // Read decision for context
-  let decisionText = '';
-  if (d.has_decision) {
-    try {
-      const res = await fetch(`/api/debate-file?dir=${encodeURIComponent(selectedDir)}&file=decision.md`);
-      if (res.ok) decisionText = await res.text();
-    } catch(e) {}
-  }
-
-  // Generate quiz from decision
-  toast(t('toast.analyzing'));
-  try {
-    const qRes = await fetch('/api/quiz', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({context: decisionText || d.topic, topic: d.topic, action: 'generate'})
-    });
-    const qData = await qRes.json();
-    if (qData.questions && qData.questions.length > 0) {
-      window._cqDir = selectedDir;
-      window._cqQuestions = qData.questions;
-      const colors = [COLORS.primary,COLORS.emerald,COLORS.cyan,COLORS.purple,COLORS.orange];
-      document.getElementById('continueQuizQuestions').innerHTML = qData.questions.map((q, i) => {
-        const col = colors[i % colors.length];
-        const opts = (q.options || []).map(opt =>
-          `<label style="display:flex;align-items:center;padding:6px 10px;margin:3px 0;cursor:pointer;border-radius:6px;border:1px solid var(--border);background:var(--border);">
-            <input type="radio" name="cq-${i}" value="${opt}" style="margin-right:8px;accent-color:${col};">
-            <span style="font-size:12px;color:rgba(224,231,255,0.8);">${opt}</span>
-          </label>`).join('');
-        return `<div style="margin-bottom:12px;padding:14px;border-left:3px solid ${col};border-radius:8px;background:rgba(15,23,42,0.4);">
-          <div style="font-size:13px;color:var(--text);margin-bottom:8px;">${i+1}. ${q.question}</div>
-          ${opts}
-          <input type="text" placeholder="${t('placeholder.type_answer')}" data-cq="${i}" style="width:100%;margin-top:6px;padding:8px;background:rgba(30,41,59,0.8);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none;">
-        </div>`;
-      }).join('');
-      document.getElementById('continueQuiz').style.display = '';
-      document.getElementById('continueQuiz').scrollIntoView({behavior:'smooth'});
-      return;
-    }
-  } catch(e) {}
-
-  // Fallback: simple prompt
-  const msg = prompt(t('msg.continue_question'));
-  if (!msg) return;
-  launchContinue(selectedDir, msg);
+  // Open context paste modal
+  openContinueModal();
 }
 
 async function submitContinueQuiz() {
@@ -581,15 +554,32 @@ function skipContinueQuiz() {
   launchContinue(window._cqDir, msg);
 }
 
-async function launchContinue(dir, message) {
+function openContinueModal() {
+  document.getElementById('continueContextText').value = '';
+  document.getElementById('continueContextModal').style.display = '';
+  document.getElementById('continueContextModal').scrollIntoView({behavior:'smooth'});
+  setTimeout(() => document.getElementById('continueContextText').focus(), 100);
+}
+
+async function submitContinueContext() {
+  const text = document.getElementById('continueContextText').value.trim();
+  if (!text) { toast('Please enter some context'); return; }
+  const turns = parseInt(document.getElementById('continueTurns').value) || 6;
+  document.getElementById('continueContextModal').style.display = 'none';
+  await launchContinue(selectedDir, text, turns);
+}
+
+async function launchContinue(dir, message, turns) {
+  const body = {debate_dir: dir, message: message};
+  if (turns) body.turns = turns;
   const res = await fetch('/api/continue', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({debate_dir: dir, message: message, turns: 6})
+    body: JSON.stringify(body)
   });
   const result = await res.json();
   if (result.ok) {
-    toast(t('toast.debate_continued'));
+    toast(result.turns ? t('toast.debate_continued_turns', {n: result.turns}) : t('toast.debate_continued'));
     window.location.href = '/debate';
   } else {
     toast(result.error || 'Failed', 'var(--red)');
